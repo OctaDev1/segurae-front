@@ -32,7 +32,9 @@ function Navbar() {
 
   return (
     <nav
-      className="fixed top-6 left-1/2 -translate-x-1/2 w-[92%] max-w-6xl bg-white/90 backdrop-blur-md shadow-xl border border-zinc-200/60 rounded-full px-6 py-3 flex items-center justify-between z-100"
+      className={`fixed top-6 left-1/2 -translate-x-1/2 w-[92%] max-w-6xl bg-white/90 backdrop-blur-md shadow-xl border border-zinc-200/60 rounded-full px-6 py-3 flex items-center justify-between z-100 transition-transform duration-300 ${
+        isVisible ? 'translate-y-0' : '-translate-y-32'
+      }`}
     >
       <Link to="/" className="flex items-center shrink-0">
         <img
@@ -63,7 +65,9 @@ function Navbar() {
       </ul>
 
       <Link
-        to="/contato"
+        to="/login"
+        target="_blank"
+        rel="noopener noreferrer"
         className="hidden lg:flex shrink-0 bg-red-600 hover:bg-red-700 text-white font-medium text-sm px-6 py-2.5 rounded-full transition-colors duration-200 shadow-md shadow-red-600/20"
       >
         Área do Cliente

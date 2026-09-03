@@ -4,6 +4,7 @@ import Contato from './pages/contato/Contato';
 import ScrollExpandIntro from './components/scrollexpand/ScrollExpandIntro';
 import Coberturas from './pages/cobertura/Cobertura';
 import Servicos from './pages/servicos/Servicos';
+import Login from './pages/login/Login';
 
 function App() {
   return (
@@ -32,6 +33,7 @@ function App() {
         <Route path="/contato" element={<Contato />} />
         <Route path="/coberturas" element={<Coberturas />} />
         <Route path="/servicos" element={<Servicos />} />
+        <Route path="/login" element={<Login />} />
 
         {/* Futuras rotas entram normalmente sem a intro */}
         {/*
