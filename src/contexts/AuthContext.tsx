@@ -69,8 +69,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 			token: "",
 		})
 
-		ToastAlerta('Usuário desconectado com sucesso!', 'sucesso');
-
+		ToastAlerta('Logout realizado com sucesso!', 'sucesso');
 	}
 
 	return (
