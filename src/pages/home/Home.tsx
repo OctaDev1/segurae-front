@@ -131,9 +131,9 @@ export default function Home() {
   const temDesconto10Anos = !isNaN(anoNum) && anoNum > 1900 && (anoAtual - anoNum >= 10);
 
   const precosBase: Record<string, number> = {
-    "Completo": 149.90,
-    "Roubo/Furto": 89.90,
-    "Terceiros": 99.90,
+    "Premium": 279.90,
+    "Completo": 199.90,
+    "Essencial": 139.90,
   };
 
   const handleSimular = (e: React.FormEvent) => {
@@ -199,8 +199,8 @@ export default function Home() {
 
             <div className="w-full h-64 lg:h-80 rounded-2xl overflow-hidden shadow-xl">
               <img
-                src="https://images.unsplash.com/photo-1617788138017-80ad40651399?q=80&w=2070&auto=format&fit=crop"
-                alt="Carro de luxo escuro"
+                src="https://ik.imagekit.io/JohnnieDiniz/segurae/carro.png"
+                alt="Carro de luxo"
                 className="w-full h-full object-cover"
               />
             </div>
@@ -229,7 +229,7 @@ export default function Home() {
                       Tipo de Cobertura
                     </label>
                     <div className="flex items-center bg-zinc-100 rounded-xl p-1 gap-1">
-                      {["Completo", "Roubo/Furto", "Terceiros"].map((tipo) => (
+                      {["Essencial", "Completo", "Premium"].map((tipo) => (
                         <button
                           key={tipo}
                           type="button"
