@@ -1,4 +1,8 @@
 import { useState, useEffect } from "react";
+import NavBar from "../../components/navbar/NavBar"; 
+import Footer from "../../components/footer/Footer";
+import DepoimentosSection from "../../components/depoimentos/DepoimentosSection";
+import EquipeSection from "../../components/equipe/EquipeSection";
 
 const vantagens = [
   {
@@ -104,9 +108,14 @@ export default function Home() {
   };
 
   return (
-    <div className="w-full">
-      <main className="min-h-screen bg-gradient-to-br from-zinc-50 via-white to-red-50/20 pt-32 pb-16 px-6 lg:px-16">
+    <div className="w-full relative bg-white">
+      {/* NavBar integrada para aparecer junto com a abertura da home */}
+      <NavBar />
+
+      <main className="min-h-screen bg-linear-to-br from-zinc-50 via-white to-red-50/25 pt-32 pb-24 px-6 lg:px-16">
         <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-16 items-start">
+          
+          {/* Coluna da Esquerda (Textos e Imagem) */}
           <div className="flex flex-col mt-4">
             <div className="inline-flex items-center gap-2 bg-red-50 text-red-600 text-[10px] sm:text-xs font-bold px-3 py-1.5 rounded-full uppercase tracking-wider w-fit mb-6 border border-red-100">
               <span className="w-2 h-2 rounded-full bg-red-600 animate-pulse"></span>
@@ -114,8 +123,7 @@ export default function Home() {
             </div>
 
             <h1 className="text-5xl lg:text-6xl font-extrabold text-zinc-900 leading-[1.1] mb-6 tracking-tight">
-              Proteção completa para o seu veículo com contratação em até{" "}
-              <span className="text-red-600">3 minutos.</span>
+              Proteção completa para o seu veículo com contratação em até <span className="text-red-600">3 minutos.</span>
             </h1>
 
             <p className="text-lg text-zinc-600 leading-relaxed mb-10 max-w-lg">
@@ -132,18 +140,12 @@ export default function Home() {
             </div>
           </div>
 
+          {/* Coluna da Direita (Formulário de Cotação) */}
           <div className="bg-white rounded-4xl shadow-2xl shadow-zinc-200/50 p-8 lg:p-10 w-full max-w-md mx-auto lg:ml-auto border border-zinc-100">
-            <h2 className="text-3xl font-bold text-zinc-900 mb-1">
-              Simule sua proteção
-            </h2>
-            <p className="text-sm text-zinc-500 mb-8">
-              Sem compromisso. Rápido e intuitivo.
-            </p>
+            <h2 className="text-3xl font-bold text-zinc-900 mb-1">Simule sua proteção</h2>
+            <p className="text-sm text-zinc-500 mb-8">Sem compromisso. Rápido e intuitivo.</p>
 
-            <form
-              className="flex flex-col gap-6"
-              onSubmit={(e) => e.preventDefault()}
-            >
+            <form className="flex flex-col gap-6" onSubmit={(e) => e.preventDefault()}>
               <div className="flex flex-col gap-3">
                 <label className="text-[10px] font-bold text-zinc-700 uppercase tracking-widest">
                   Tipo de Cobertura
@@ -224,89 +226,61 @@ export default function Home() {
             </form>
           </div>
         </div>
-      </main>
 
-      <section className="py-20 lg:py-32 bg-linear-to-b from-blue-50/40 to-white px-6 lg:px-16 overflow-hidden">
-        <div className="max-w-7xl mx-auto flex flex-col items-center text-center mb-16">
-          <span className="text-red-600 text-[11px] font-bold uppercase tracking-[0.2em] mb-4">
-            Vantagens Exclusivas
-          </span>
-          <h2 className="text-3xl lg:text-5xl font-extrabold text-zinc-900 mb-6 max-w-3xl tracking-tight">
-            Por que escolher a Seguraê para proteger seu carro?
-          </h2>
-          <p className="text-lg text-zinc-600 max-w-2xl">
-            Coberturas pensadas nos mínimos detalhes para que você e sua família
-            rodem com total tranquilidade todos os dias.
-          </p>
-        </div>
+        {/* SEÇÃO DE VANTAGENS (Carrossel criado pelo seu amigo) */}
+        <div className="max-w-7xl mx-auto mt-32">
+          <div className="text-center mb-12">
+            <h3 className="text-3xl lg:text-4xl font-extrabold text-zinc-900 tracking-tight mb-4">
+              Por que escolher a Seguraê?
+            </h3>
+            <p className="text-zinc-600 max-w-2xl mx-auto">
+              Desenvolvemos benefícios exclusivos para garantir que você e seu veículo rodem com total tranquilidade.
+            </p>
+          </div>
 
-        <div className="max-w-7xl mx-auto relative">
-          <div className="overflow-hidden px-2 py-4">
-            <div
-              className="flex transition-transform duration-500 ease-in-out"
-              style={{
-                transform: `translateX(-${currentIndex * (100 / itemsPerView)}%)`,
-              }}
+          <div className="relative overflow-hidden px-2">
+            <div 
+              className="flex transition-transform duration-500 ease-out gap-6"
+              style={{ transform: `translateX(-${currentIndex * (100 / itemsPerView)}%)` }}
             >
-              {vantagens.map((item, index) => (
-                <div
+              {vantagens.map((vantagem, index) => (
+                <div 
                   key={index}
-                  className="w-full md:w-1/2 lg:w-1/3 shrink-0 px-4"
+                  style={{ minWidth: `calc(${100 / itemsPerView}% - ${(itemsPerView - 1) * 24 / itemsPerView}px)` }}
+                  className="snap-start shrink-0 w-full md:w-[calc(50%-12px)] lg:w-[calc(33.333%-16px)] bg-white p-8 rounded-3xl border border-zinc-100 shadow-xl shadow-zinc-100 flex flex-col justify-between"
                 >
-                  <div className="bg-white rounded-[2rem] p-8 lg:p-10 shadow-xl shadow-zinc-200/40 border border-zinc-100 h-full flex flex-col transition-transform duration-300 hover:-translate-y-1">
-                    <div className="w-14 h-14 rounded-2xl bg-red-50 text-red-600 flex items-center justify-center mb-6">
-                      {item.icone}
+                  <div>
+                    <div className="w-12 h-12 rounded-2xl bg-red-50 text-red-600 flex items-center justify-center mb-6">
+                      {vantagem.icone}
                     </div>
-                    <h3 className="text-xl font-bold text-zinc-900 mb-3">
-                      {item.titulo}
-                    </h3>
-                    <p className="text-zinc-600 leading-relaxed text-[15px]">
-                      {item.descricao}
-                    </p>
+                    <h4 className="text-xl font-bold text-zinc-900 mb-3">{vantagem.titulo}</h4>
+                    <p className="text-zinc-600 text-sm leading-relaxed">{vantagem.descricao}</p>
                   </div>
                 </div>
               ))}
             </div>
-          </div>
 
-          <div className="flex justify-center items-center gap-6 mt-10">
-            <button
-              onClick={prevSlide}
-              aria-label="Anterior"
-              className="flex items-center justify-center w-12 h-12 rounded-full bg-white border border-zinc-200 text-zinc-600 hover:bg-red-600 hover:text-white hover:border-red-600 shadow-sm transition-all duration-300"
-            >
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="m15 18-6-6 6-6" />
-              </svg>
-            </button>
-
-            <div className="flex gap-3">
-              {Array.from({ length: maxIndex + 1 }).map((_, idx) => (
-                <button
-                  key={idx}
-                  onClick={() => setCurrentIndex(idx)}
-                  className={`transition-all duration-300 rounded-full ${
-                    currentIndex === idx
-                      ? "w-8 h-2.5 bg-red-600"
-                      : "w-2.5 h-2.5 bg-red-200 hover:bg-red-400"
-                  }`}
-                  aria-label={`Ir para o slide ${idx + 1}`}
-                />
-              ))}
+            {/* Botões do Carrossel */}
+            <div className="flex justify-center gap-4 mt-8">
+              <button 
+                onClick={prevSlide}
+                className="w-10 h-10 rounded-full bg-white border border-zinc-200 flex items-center justify-center text-zinc-700 hover:bg-zinc-50 shadow-sm transition-colors"
+              >
+                ←
+              </button>
+              <button 
+                onClick={nextSlide}
+                className="w-10 h-10 rounded-full bg-white border border-zinc-200 flex items-center justify-center text-zinc-700 hover:bg-zinc-50 shadow-sm transition-colors"
+              >
+                →
+              </button>
             </div>
-
-            <button
-              onClick={nextSlide}
-              aria-label="Próximo"
-              className="flex items-center justify-center w-12 h-12 rounded-full bg-white border border-zinc-200 text-zinc-600 hover:bg-red-600 hover:text-white hover:border-red-600 shadow-sm transition-all duration-300"
-            >
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="m9 18 6-6-6-6" />
-              </svg>
-            </button>
           </div>
         </div>
-      </section>
+      </main>
+      <DepoimentosSection />
+      <EquipeSection />
+      <Footer />
     </div>
   );
 }

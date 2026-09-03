@@ -1,26 +1,46 @@
 import { BrowserRouter, Route, Routes } from 'react-router-dom';
-import NavBar from './components/navbar/NavBar';
 import Home from './pages/home/Home';
+import Contato from './pages/contato/Contato';
+import ScrollExpandIntro from './components/scrollexpand/ScrollExpandIntro';
+import Coberturas from './pages/cobertura/Cobertura';
+import Servicos from './pages/servicos/Servicos';
 
 function App() {
   return (
+    <BrowserRouter>
+      <Routes>
+        {/* Rota inicial com a animação de intro */}
+        <Route
+          path="/"
+          element={
+            <ScrollExpandIntro>
+              <Home />
+            </ScrollExpandIntro>
+          }
+        />
+        
+        {/* Rota /home também utilizando a intro */}
+        <Route
+          path="/home"
+          element={
+            <ScrollExpandIntro>
+              <Home />
+            </ScrollExpandIntro>
+          }
+        />
 
-      <BrowserRouter>
-        <NavBar />
-        <Routes>
-          <Route path="/" element={<Home />} />
-          <Route path="/home" element={<Home />} />
-          {/*
-          próximas rotas aqui
-          <Route path="/coberturas" element={<Coberturas />} />
-          <Route path="/vantagens" element={<Vantagens />} />
-          <Route path="/como-funciona" element={<ComoFunciona />} />
-          <Route path="/avaliacoes" element={<Avaliacoes />} />
-          <Route path="/faq" element={<Faq />} />
-          */}
-        </Routes>
-      </BrowserRouter>
+        <Route path="/contato" element={<Contato />} />
+        <Route path="/coberturas" element={<Coberturas />} />
+        <Route path="/servicos" element={<Servicos />} />
 
+        {/* Futuras rotas entram normalmente sem a intro */}
+        {/*
+        
+        <Route path="/avaliacoes" element={<Avaliacoes />} />
+        <Route path="/contato" element={<Contato />} />
+        */}
+      </Routes>
+    </BrowserRouter>
   );
 }
 

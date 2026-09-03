@@ -1,0 +1,11 @@
+import type { TeamMember } from "../types/HomeTypes";
+
+export const TEAM_MEMBERS: TeamMember[] = [
+  { name: "Felipe Oliveira Lopes", role: "Desenvolvedor Full Stack Júnior", description: "Especialista em construir interfaces fluidas com React e TypeScript, aliado a um backend robusto.", imageUrl: "https://ik.imagekit.io/JohnnieDiniz/integrantes/foto_felipe.jpeg?updatedAt=1787845475178" },
+  { name: "Gabriel José Alegre", role: "Product Designer", description: "Focado em criar experiências de usuário intuitivas e acessíveis, garantindo que o design atenda as necessidades do cliente.", imageUrl: "https://ik.imagekit.io/JohnnieDiniz/integrantes/gabriel.png?updatedAt=1787845475225" },
+  { name: "Guilherme Oliveira", role: "Desenvolvedor Full Stack Júnior", description: "Dedicado ao desenvolvimento ágil, versionamento de código e automação de rotinas no ecossistema Spring.", imageUrl: "https://ik.imagekit.io/JohnnieDiniz/integrantes/guilherme.jpeg?updatedAt=1787845475160" },
+  { name: "João Vitor Diniz Alves", role: "Desenvolvedor Full Stack Júnior", description: "Especialista em backend com Java e Spring Boot, unindo forças com frontend moderno em React e Tailwind.", imageUrl: "https://ik.imagekit.io/JohnnieDiniz/Joao%20Vitor.jpg?updatedAt=1787581763893" },
+  { name: "Juliana Macedo", role: "Desenvolvedor Full Stack Júnior", description: "Apaixonada por resolução de problemas, lógica de programação e integração contínua de sistemas web.", imageUrl: "https://ik.imagekit.io/JohnnieDiniz/integrantes/Juliana.jpg?updatedAt=1787845475220" },
+  { name: "Maryane Praxedes", role: "Desenvolvedor Full Stack Júnior", description: "Focada em entregar soluções limpas, testes unitários rigorosos e experiências visuais responsivas.", imageUrl: "https://ik.imagekit.io/JohnnieDiniz/integrantes/Maryane.webp?updatedAt=1787848292301" },
+  { name: "Thiago José Versiani", role: "Desenvolvedor Full Stack Júnior", description: "Construindo aplicações seguras, escaláveis e focadas em otimização de performance corporativa.", imageUrl: "https://ik.imagekit.io/JohnnieDiniz/integrantes/thiago.jpg?updatedAt=1787845475180" }
+];
