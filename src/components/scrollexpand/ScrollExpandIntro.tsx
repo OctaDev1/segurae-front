@@ -10,12 +10,12 @@ export default function ScrollExpandIntro({ children }: ScrollExpandIntroProps) 
   const [isEntering, setIsEntering] = useState(false);
   const [isEntered, setIsEntered] = useState(false);
 
-  // Bloqueia a rolagem do corpo enquanto a tela de abertura estiver ativa
+  // Bloqueia a rolagem do corpo enquanto a tela de abertura estiver ativa e garante scroll no topo
   useEffect(() => {
     if (!isEntered && !shouldReduceMotion) {
       const originalOverflow = document.body.style.overflow;
       document.body.style.overflow = "hidden";
-      window.scrollTo(0, 0);
+      window.scrollTo({ top: 0, left: 0, behavior: "instant" });
 
       return () => {
         document.body.style.overflow = originalOverflow;
@@ -23,19 +23,21 @@ export default function ScrollExpandIntro({ children }: ScrollExpandIntroProps) 
     }
   }, [isEntered, shouldReduceMotion]);
 
-  // Se o usuário preferir redução de movimento, entra diretamente
-  if (shouldReduceMotion) {
+  // Se o usuário preferir redução de movimento ou já entrou, entrega a Home no fluxo 100% nativo
+  if (shouldReduceMotion || isEntered) {
     return <div className="w-full relative">{children}</div>;
   }
 
   const handleEnter = () => {
     if (isEntering || isEntered) return;
+    window.scrollTo({ top: 0, left: 0, behavior: "instant" });
     setIsEntering(true);
 
-    // Duração sincronizada com a animação suave cinematográfica
+    // Duração sincronizada com a animação suave de saída do card
     setTimeout(() => {
       setIsEntered(true);
       document.body.style.overflow = "";
+      window.scrollTo({ top: 0, left: 0, behavior: "instant" });
     }, 950);
   };
 
@@ -49,7 +51,7 @@ export default function ScrollExpandIntro({ children }: ScrollExpandIntroProps) 
             animate={isEntering ? { opacity: 0 } : { opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.95, ease: [0.22, 1, 0.36, 1] }}
-            className="fixed inset-0 z-50 flex items-center justify-center bg-red-50/90 sm:bg-red-50 px-4 select-none overflow-hidden"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-red-50/95 sm:bg-red-50 px-4 select-none overflow-hidden"
           >
             {/* Card Minimalista e Sofisticado seguindo exatamente a referência visual */}
             <motion.div
@@ -131,19 +133,10 @@ export default function ScrollExpandIntro({ children }: ScrollExpandIntroProps) 
         )}
       </AnimatePresence>
 
-      {/* Conteúdo da Home revelado suavemente */}
-      <motion.div
-        initial={{ opacity: 0, scale: 0.96, filter: "blur(8px)" }}
-        animate={
-          isEntering || isEntered
-            ? { opacity: 1, scale: 1, filter: "blur(0px)" }
-            : { opacity: 0, scale: 0.96, filter: "blur(8px)" }
-        }
-        transition={{ duration: 0.95, ease: [0.22, 1, 0.36, 1] }}
-        className="w-full relative z-10"
-      >
+      {/* Conteúdo da Home no fluxo natural, sem transform nem filter que corte a Navbar */}
+      <div className="w-full relative z-10">
         {children}
-      </motion.div>
+      </div>
     </div>
   );
 }

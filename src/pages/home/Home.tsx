@@ -3,6 +3,7 @@ import NavBar from "../../components/navbar/NavBar";
 import Footer from "../../components/footer/Footer";
 import DepoimentosSection from "../../components/depoimentos/DepoimentosSection";
 import EquipeSection from "../../components/equipe/EquipeSection";
+import { ToastAlerta } from "../../utils/toastalerta/ToastAlerta";
 
 const vantagens = [
   {
@@ -75,6 +76,23 @@ const vantagens = [
 
 export default function Home() {
   const [tipoCobertura, setTipoCobertura] = useState("Completo");
+  const [placa, setPlaca] = useState("");
+  const [modelo, setModelo] = useState("");
+  const [ano, setAno] = useState("");
+  const [cep, setCep] = useState("");
+  const [whatsapp, setWhatsapp] = useState("");
+  const [isCalculando, setIsCalculando] = useState(false);
+  const [resultadoSimulacao, setResultadoSimulacao] = useState<{
+    tipo: string;
+    valorBase: number;
+    desconto: number;
+    valorFinal: number;
+    temDesconto10Anos: boolean;
+    anoVeiculo: number;
+    modelo: string;
+    placa: string;
+  } | null>(null);
+
   const [currentIndex, setCurrentIndex] = useState(0);
   const [itemsPerView, setItemsPerView] = useState(3);
 
@@ -105,6 +123,54 @@ export default function Home() {
 
   const nextSlide = () => {
     setCurrentIndex((prev) => (prev >= maxIndex ? 0 : prev + 1));
+  };
+
+  const anoAtual = new Date().getFullYear();
+  const anoNum = parseInt(ano, 10);
+  // Regra: se o carro tiver 10 anos ou mais em relação ao ano atual, recebe 20% de desconto
+  const temDesconto10Anos = !isNaN(anoNum) && anoNum > 1900 && (anoAtual - anoNum >= 10);
+
+  const precosBase: Record<string, number> = {
+    "Completo": 149.90,
+    "Roubo/Furto": 89.90,
+    "Terceiros": 99.90,
+  };
+
+  const handleSimular = (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!placa.trim() && !modelo.trim() && !ano.trim()) {
+      ToastAlerta("Por favor, preencha ao menos o modelo ou placa e ano do veículo.", "erro");
+      return;
+    }
+
+    setIsCalculando(true);
+
+    setTimeout(() => {
+      const valorBase = precosBase[tipoCobertura] || 149.90;
+      const aplicaDesconto = temDesconto10Anos;
+      const desconto = aplicaDesconto ? 0.20 : 0;
+      const valorFinal = valorBase * (1 - desconto);
+
+      setResultadoSimulacao({
+        tipo: tipoCobertura,
+        valorBase,
+        desconto,
+        valorFinal,
+        temDesconto10Anos: aplicaDesconto,
+        anoVeiculo: !isNaN(anoNum) ? anoNum : anoAtual,
+        modelo: modelo.trim() || "Veículo",
+        placa: placa.trim().toUpperCase() || "MERCOSUL",
+      });
+
+      setIsCalculando(false);
+      ToastAlerta(
+        aplicaDesconto
+          ? "Simulação concluída! Desconto de 20% aplicado para veículo com 10+ anos."
+          : "Simulação calculada com sucesso!",
+        "sucesso"
+      );
+    }, 350);
   };
 
   return (
@@ -140,90 +206,272 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Coluna da Direita (Formulário de Cotação) */}
-          <div className="bg-white rounded-4xl shadow-2xl shadow-zinc-200/50 p-8 lg:p-10 w-full max-w-md mx-auto lg:ml-auto border border-zinc-100">
-            <h2 className="text-3xl font-bold text-zinc-900 mb-1">Simule sua proteção</h2>
-            <p className="text-sm text-zinc-500 mb-8">Sem compromisso. Rápido e intuitivo.</p>
-
-            <form className="flex flex-col gap-6" onSubmit={(e) => e.preventDefault()}>
-              <div className="flex flex-col gap-3">
-                <label className="text-[10px] font-bold text-zinc-700 uppercase tracking-widest">
-                  Tipo de Cobertura
-                </label>
-                <div className="flex items-center bg-zinc-100 rounded-xl p-1">
-                  {["Completo", "Roubo/Furto", "Terceiros"].map((tipo) => (
-                    <button
-                      key={tipo}
-                      type="button"
-                      onClick={() => setTipoCobertura(tipo)}
-                      className={`flex-1 py-2.5 text-sm font-medium rounded-lg transition-all duration-200 ${
-                        tipoCobertura === tipo
-                          ? "bg-red-600 text-white shadow-md"
-                          : "text-zinc-600 hover:text-zinc-900 hover:bg-zinc-200/50"
-                      }`}
-                    >
-                      {tipo}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="flex flex-col gap-3">
-                <label className="text-[10px] font-bold text-zinc-700 uppercase tracking-widest">
-                  Placa do Veículo
-                </label>
-                <div className="relative">
-                  <input
-                    type="text"
-                    placeholder="BRA2E19"
-                    className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3.5 text-zinc-900 font-medium focus:outline-none focus:ring-2 focus:ring-red-600 focus:border-transparent uppercase placeholder:normal-case placeholder:text-zinc-400"
-                  />
-                  <div className="absolute right-3 top-1/2 -translate-y-1/2 bg-zinc-900 text-white text-[9px] font-bold px-2 py-1 rounded border-t-2 border-t-blue-500 flex items-center">
-                    MERCOSUL
+          {/* Coluna da Direita (Simulador Interativo de Proteção) */}
+          <div className="bg-white rounded-4xl shadow-2xl shadow-zinc-200/50 p-6 sm:p-8 lg:p-10 w-full max-w-md mx-auto lg:ml-auto border border-zinc-100 transition-all">
+            {!resultadoSimulacao ? (
+              <>
+                <div className="mb-6">
+                  <div className="inline-flex items-center gap-1.5 bg-red-50 text-red-600 text-[10px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wider border border-red-100 mb-2">
+                    Cotação Rápida & Sem Cadastro
                   </div>
+                  <h2 className="text-2xl sm:text-3xl font-bold text-zinc-900 tracking-tight">
+                    Simule sua proteção
+                  </h2>
+                  <p className="text-xs sm:text-sm text-zinc-500 mt-1">
+                    Calcule na hora o valor para o seu veículo sem burocracia.
+                  </p>
+                </div>
+
+                <form className="flex flex-col gap-4 sm:gap-5" onSubmit={handleSimular}>
+                  {/* Tipo de Cobertura */}
+                  <div className="flex flex-col gap-2">
+                    <label className="text-[10px] font-bold text-zinc-700 uppercase tracking-widest">
+                      Tipo de Cobertura
+                    </label>
+                    <div className="flex items-center bg-zinc-100 rounded-xl p-1 gap-1">
+                      {["Completo", "Roubo/Furto", "Terceiros"].map((tipo) => (
+                        <button
+                          key={tipo}
+                          type="button"
+                          onClick={() => setTipoCobertura(tipo)}
+                          className={`flex-1 py-2 text-xs sm:text-sm font-medium rounded-lg transition-all duration-200 cursor-pointer ${
+                            tipoCobertura === tipo
+                              ? "bg-red-600 text-white shadow-md font-semibold"
+                              : "text-zinc-600 hover:text-zinc-900 hover:bg-zinc-200/50"
+                          }`}
+                        >
+                          {tipo}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Placa */}
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[10px] font-bold text-zinc-700 uppercase tracking-widest">
+                      Placa do Veículo
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="text"
+                        placeholder="BRA2E19"
+                        maxLength={7}
+                        value={placa}
+                        onChange={(e) => setPlaca(e.target.value.toUpperCase())}
+                        className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 text-zinc-900 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-red-600 focus:border-transparent uppercase placeholder:normal-case placeholder:text-zinc-400"
+                      />
+                      <div className="absolute right-3 top-1/2 -translate-y-1/2 bg-zinc-900 text-white text-[9px] font-bold px-2 py-1 rounded border-t-2 border-t-blue-500 flex items-center">
+                        MERCOSUL
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Modelo e Ano */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-[10px] font-bold text-zinc-700 uppercase tracking-widest">
+                        Modelo do Veículo
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="Ex: Honda Civic"
+                        value={modelo}
+                        onChange={(e) => setModelo(e.target.value)}
+                        className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 text-zinc-900 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-red-600 focus:border-transparent placeholder:text-zinc-400"
+                      />
+                    </div>
+
+                    <div className="flex flex-col gap-1.5">
+                      <div className="flex items-center justify-between">
+                        <label className="text-[10px] font-bold text-zinc-700 uppercase tracking-widest">
+                          Ano Fabricação
+                        </label>
+                        {temDesconto10Anos && (
+                          <span className="text-[10px] font-extrabold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100">
+                            20% OFF
+                          </span>
+                        )}
+                      </div>
+                      <input
+                        type="number"
+                        min="1970"
+                        max={anoAtual + 1}
+                        placeholder="Ex: 2014"
+                        value={ano}
+                        onChange={(e) => setAno(e.target.value)}
+                        className={`w-full bg-zinc-50 border rounded-xl px-4 py-3 text-zinc-900 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-red-600 focus:border-transparent placeholder:text-zinc-400 transition-colors ${
+                          temDesconto10Anos
+                            ? "border-emerald-500 ring-1 ring-emerald-500/30"
+                            : "border-zinc-200"
+                        }`}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Destaque dinâmico do desconto de 20% para carros com 10 anos ou mais */}
+                  {temDesconto10Anos && (
+                    <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 px-3.5 py-2.5 rounded-xl text-xs flex items-start gap-2.5 animate-in fade-in duration-200">
+                      <span className="text-base leading-none">🎉</span>
+                      <div>
+                        <p className="font-bold">Desconto de 20% aplicado!</p>
+                        <p className="text-[11px] text-emerald-700 mt-0.5">
+                          Veículos fabricados há 10 anos ou mais ({ano}) ganham 20% de desconto na Seguraê.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* CEP e WhatsApp */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-[10px] font-bold text-zinc-700 uppercase tracking-widest">
+                        CEP de Pernoite
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="01310-100"
+                        maxLength={9}
+                        value={cep}
+                        onChange={(e) => setCep(e.target.value)}
+                        className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 text-zinc-900 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-red-600 focus:border-transparent placeholder:text-zinc-400"
+                      />
+                    </div>
+
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-[10px] font-bold text-zinc-700 uppercase tracking-widest">
+                        WhatsApp
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="(11) 99999-9999"
+                        value={whatsapp}
+                        onChange={(e) => setWhatsapp(e.target.value)}
+                        className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 text-zinc-900 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-red-600 focus:border-transparent placeholder:text-zinc-400"
+                      />
+                    </div>
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={isCalculando}
+                    className="w-full bg-red-600 hover:bg-red-700 active:scale-[0.99] text-white font-bold text-base py-3.5 rounded-xl transition-all duration-200 shadow-lg shadow-red-600/30 hover:shadow-red-600/40 cursor-pointer flex items-center justify-center gap-2 mt-1 disabled:opacity-75"
+                  >
+                    {isCalculando ? (
+                      <>
+                        <svg className="animate-spin h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        <span>Calculando cotação...</span>
+                      </>
+                    ) : (
+                      <span>Simular Agora</span>
+                    )}
+                  </button>
+                </form>
+              </>
+            ) : (
+              /* Card de Resultado da Simulação */
+              <div className="flex flex-col animate-in fade-in zoom-in-95 duration-200">
+                <div className="flex items-center justify-between mb-4">
+                  <span className="text-[10px] font-bold text-red-600 bg-red-50 border border-red-100 px-3 py-1 rounded-full uppercase tracking-wider">
+                    Cotação Concluída
+                  </span>
+                  <span className="text-xs font-semibold text-zinc-500 bg-zinc-100 px-2.5 py-0.5 rounded-full">
+                    Plano {resultadoSimulacao.tipo}
+                  </span>
+                </div>
+
+                <h3 className="text-xl sm:text-2xl font-bold text-zinc-900 mb-1">
+                  {resultadoSimulacao.modelo}
+                </h3>
+                <p className="text-xs text-zinc-500 mb-5">
+                  Placa: <span className="font-semibold text-zinc-700">{resultadoSimulacao.placa}</span> • Ano: <span className="font-semibold text-zinc-700">{resultadoSimulacao.anoVeiculo}</span>
+                </p>
+
+                {/* Box de Preço com Destaque do Desconto de 20% */}
+                <div className="p-5 rounded-2xl bg-zinc-50 border border-zinc-200/80 mb-5">
+                  {resultadoSimulacao.temDesconto10Anos ? (
+                    <>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className="text-xs text-zinc-400 line-through">
+                          De {resultadoSimulacao.valorBase.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}/mês
+                        </span>
+                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase bg-emerald-500 text-white shadow-xs">
+                          20% OFF (10+ ANOS)
+                        </span>
+                      </div>
+                      <div className="flex items-baseline gap-2">
+                        <span className="text-3xl sm:text-4xl font-black text-zinc-900 tracking-tight">
+                          {resultadoSimulacao.valorFinal.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+                        </span>
+                        <span className="text-xs text-zinc-500 font-medium">/ mês</span>
+                      </div>
+                      <p className="text-xs text-emerald-600 font-semibold mt-2.5 flex items-center gap-1.5">
+                        <span>✓</span>
+                        <span>Economia garantida de {(resultadoSimulacao.valorBase * 0.20).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })} todos os meses!</span>
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <span className="text-xs text-zinc-500 uppercase tracking-wider block mb-1">
+                        Mensalidade Estimada
+                      </span>
+                      <div className="flex items-baseline gap-2">
+                        <span className="text-3xl sm:text-4xl font-black text-zinc-900 tracking-tight">
+                          {resultadoSimulacao.valorFinal.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+                        </span>
+                        <span className="text-xs text-zinc-500 font-medium">/ mês</span>
+                      </div>
+                      <p className="text-xs text-zinc-500 mt-2">
+                        Sem taxa de adesão ou carência.
+                      </p>
+                    </>
+                  )}
+                </div>
+
+                {/* Vantagens Inclusas */}
+                <ul className="space-y-2 text-xs text-zinc-600 mb-6">
+                  <li className="flex items-center gap-2">
+                    <span className="w-4 h-4 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center font-bold text-[10px] shrink-0">✓</span>
+                    <span>Guincho 24h e socorro mecânico ilimitado</span>
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <span className="w-4 h-4 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center font-bold text-[10px] shrink-0">✓</span>
+                    <span>Indenização de até 100% da Tabela FIPE</span>
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <span className="w-4 h-4 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center font-bold text-[10px] shrink-0">✓</span>
+                    <span>Contratação 100% digital em minutos</span>
+                  </li>
+                </ul>
+
+                {/* Botões de Ação */}
+                <div className="flex flex-col gap-2.5">
+                  <a
+                    href={`https://wa.me/5511999999999?text=${encodeURIComponent(
+                      `Olá! Realizei a simulação no site da Seguraê para o veículo ${resultadoSimulacao.modelo} (Ano ${resultadoSimulacao.anoVeiculo}, Placa ${resultadoSimulacao.placa}) no plano ${resultadoSimulacao.tipo} pelo valor de ${resultadoSimulacao.valorFinal.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}/mês${
+                        resultadoSimulacao.temDesconto10Anos ? " (com desconto de 20% para veículos com 10+ anos)" : ""
+                      }. Gostaria de prosseguir com a contratação!`
+                    )}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="w-full bg-emerald-600 hover:bg-emerald-700 active:scale-[0.99] text-white font-bold py-3.5 px-6 rounded-xl transition-all duration-200 shadow-lg shadow-emerald-600/25 flex items-center justify-center gap-2 text-sm text-center"
+                  >
+                    <span>Contratar pelo WhatsApp</span>
+                    <span>&rarr;</span>
+                  </a>
+
+                  <button
+                    type="button"
+                    onClick={() => setResultadoSimulacao(null)}
+                    className="w-full bg-zinc-100 hover:bg-zinc-200 text-zinc-700 font-semibold py-2.5 px-4 rounded-xl transition-colors text-xs text-center cursor-pointer"
+                  >
+                    Fazer nova simulação
+                  </button>
                 </div>
               </div>
-
-              <div className="flex flex-col gap-3">
-                <label className="text-[10px] font-bold text-zinc-700 uppercase tracking-widest">
-                  Modelo ou Ano
-                </label>
-                <input
-                  type="text"
-                  placeholder="Ex: Honda Civic 2022"
-                  className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3.5 text-zinc-900 font-medium focus:outline-none focus:ring-2 focus:ring-red-600 focus:border-transparent placeholder:text-zinc-400 placeholder:font-normal"
-                />
-              </div>
-
-              <div className="flex flex-col gap-3">
-                <label className="text-[10px] font-bold text-zinc-700 uppercase tracking-widest">
-                  CEP de Pernoite
-                </label>
-                <input
-                  type="text"
-                  placeholder="01310-100"
-                  className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3.5 text-zinc-900 font-medium focus:outline-none focus:ring-2 focus:ring-red-600 focus:border-transparent placeholder:text-zinc-400 placeholder:font-normal"
-                />
-              </div>
-
-              <div className="flex flex-col gap-3">
-                <label className="text-[10px] font-bold text-zinc-700 uppercase tracking-widest">
-                  WhatsApp para envio da cotação
-                </label>
-                <input
-                  type="text"
-                  placeholder="WhatsApp"
-                  className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3.5 text-zinc-900 font-medium focus:outline-none focus:ring-2 focus:ring-red-600 focus:border-transparent placeholder:text-zinc-400 placeholder:font-normal"
-                />
-              </div>
-
-              <button
-                type="submit"
-                className="w-full bg-red-600 hover:bg-red-700 text-white font-semibold text-lg py-4 rounded-xl mt-2 transition-colors duration-200 shadow-lg shadow-red-600/30"
-              >
-                Simular Agora
-              </button>
-            </form>
+            )}
           </div>
         </div>
 
