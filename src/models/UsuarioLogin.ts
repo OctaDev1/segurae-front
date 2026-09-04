@@ -7,4 +7,5 @@ export default interface UsuarioLogin {
   foto: string;
   fotoUrl?: string;
   token: string;
+  perfil?: 'ROLE_CLIENTE' | 'ROLE_CORRETOR' | string;
 }

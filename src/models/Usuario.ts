@@ -9,4 +9,5 @@ export default interface Usuario {
   fotoUrl?: string;
   foto?: string;
   apolices?: Apolice[] | null;
+  perfil?: 'ROLE_CLIENTE' | 'ROLE_CORRETOR' | string;
 }

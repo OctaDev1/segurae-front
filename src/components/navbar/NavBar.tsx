@@ -73,7 +73,23 @@ function Navbar() {
     navigate('/login');
   };
 
-  // 2. Botão "Dashboard" -> Verifica token e direciona para a listagem (/apolices)
+  // 2. Botão "Meu Painel" -> Direciona para o dashboard específico do perfil
+  const handleMeuPainel = () => {
+    setIsMenuOpen(false);
+    if (!usuario.token) {
+      ToastAlerta('Você precisa estar logado para acessar seu Painel.', 'erro');
+      navigate('/login');
+      return;
+    }
+    const perfil = usuario.perfil || localStorage.getItem('perfil');
+    if (perfil === 'ROLE_CORRETOR') {
+      navigate('/dashboard/corretor');
+    } else {
+      navigate('/dashboard/cliente');
+    }
+  };
+
+  // 3. Botão "Minhas Apólices" -> Verifica token e direciona para a listagem (/apolices)
   const handleDashboard = () => {
     setIsMenuOpen(false);
     if (!usuario.token) {
@@ -85,7 +101,7 @@ function Navbar() {
     navigate('/apolices');
   };
 
-  // 3. Botão "Sair"
+  // 4. Botão "Sair"
   const handleSair = () => {
     setIsMenuOpen(false);
     if (usuario.token) {
@@ -169,44 +185,79 @@ function Navbar() {
                   <p className="text-xs font-bold text-zinc-900 truncate">
                     {usuario.nome || usuario.usuario || 'Usuário Conectado'}
                   </p>
-                  <p className="text-[11px] text-emerald-600 font-medium flex items-center gap-1">
+                  <div className="flex items-center gap-1.5 mt-0.5">
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block animate-pulse" />
-                    Autenticado
-                  </p>
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-red-600 bg-red-50 px-1.5 py-0.5 rounded border border-red-100">
+                      {(usuario.perfil || localStorage.getItem('perfil')) === 'ROLE_CORRETOR' ? 'Corretor' : 'Segurado'}
+                    </span>
+                  </div>
                 </div>
               </div>
             )}
 
-            {/* Opção 1: Entrar (Vai para /login) */}
-            <button
-              type="button"
-              onClick={handleEntrar}
-              className="w-full flex items-center gap-3 px-3 py-2.5 text-xs sm:text-sm font-medium text-zinc-700 hover:text-zinc-900 hover:bg-zinc-100/80 rounded-xl transition-colors text-left cursor-pointer group"
-              role="menuitem"
-            >
-              <div className="w-8 h-8 rounded-lg bg-zinc-100 group-hover:bg-red-50 text-zinc-600 group-hover:text-red-600 flex items-center justify-center transition-colors shrink-0">
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  strokeWidth={1.8}
-                  stroke="currentColor"
-                  className="w-4 h-4"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15M12 9l-3 3m0 0l3 3m-3-3h12.75"
-                  />
-                </svg>
-              </div>
-              <div>
-                <span className="block font-semibold">Entrar</span>
-                <span className="block text-[11px] text-zinc-400 font-normal">
-                  Acesse sua conta
-                </span>
-              </div>
-            </button>
+            {/* Opção: Meu Painel (Visível se logado) */}
+            {usuario.token ? (
+              <button
+                type="button"
+                onClick={handleMeuPainel}
+                className="w-full flex items-center gap-3 px-3 py-2.5 text-xs sm:text-sm font-medium text-zinc-700 hover:text-zinc-900 hover:bg-zinc-100/80 rounded-xl transition-colors text-left cursor-pointer group"
+                role="menuitem"
+              >
+                <div className="w-8 h-8 rounded-lg bg-zinc-100 group-hover:bg-red-50 text-zinc-600 group-hover:text-red-600 flex items-center justify-center transition-colors shrink-0">
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    strokeWidth={1.8}
+                    stroke="currentColor"
+                    className="w-4 h-4"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25a2.25 2.25 0 01-13.5 18v-2.25z"
+                    />
+                  </svg>
+                </div>
+                <div>
+                  <span className="block font-semibold">Meu Painel</span>
+                  <span className="block text-[11px] text-zinc-400 font-normal">
+                    {(usuario.perfil || localStorage.getItem('perfil')) === 'ROLE_CORRETOR' ? 'Área do Corretor' : 'Área do Segurado'}
+                  </span>
+                </div>
+              </button>
+            ) : (
+              /* Opção: Entrar (Visível se não logado) */
+              <button
+                type="button"
+                onClick={handleEntrar}
+                className="w-full flex items-center gap-3 px-3 py-2.5 text-xs sm:text-sm font-medium text-zinc-700 hover:text-zinc-900 hover:bg-zinc-100/80 rounded-xl transition-colors text-left cursor-pointer group"
+                role="menuitem"
+              >
+                <div className="w-8 h-8 rounded-lg bg-zinc-100 group-hover:bg-red-50 text-zinc-600 group-hover:text-red-600 flex items-center justify-center transition-colors shrink-0">
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    strokeWidth={1.8}
+                    stroke="currentColor"
+                    className="w-4 h-4"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15M12 9l-3 3m0 0l3 3m-3-3h12.75"
+                    />
+                  </svg>
+                </div>
+                <div>
+                  <span className="block font-semibold">Entrar</span>
+                  <span className="block text-[11px] text-zinc-400 font-normal">
+                    Acesse sua conta
+                  </span>
+                </div>
+              </button>
+            )}
 
             {/* Opção 2: Dashboard (Vai para a Listagem em /apolices) */}
             <button

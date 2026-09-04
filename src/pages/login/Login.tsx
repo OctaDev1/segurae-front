@@ -1,5 +1,7 @@
-import { useState } from 'react';
+import { useState, useContext, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { AuthContext } from '../../contexts/AuthContext';
+import { ToastAlerta } from '../../utils/toastalerta/ToastAlerta';
 import {
   Car,
   Briefcase,
@@ -17,15 +19,16 @@ import {
 
 export default function Login() {
   const navigate = useNavigate();
+  const { handleLogin: authLogin, isLoading: authLoading } = useContext(AuthContext);
 
   // ==========================================
-  // ESTADOS DO FORMULÁRIO (ESTILO JÚNIOR)
+  // ESTADOS DO FORMULÁRIO
   // ==========================================
 
   // 1. Tipo de login ativo: 'cliente' (segurado) ou 'corretor'
   const [tipoAcesso, setTipoAcesso] = useState<'cliente' | 'corretor'>('cliente');
 
-  // 2. Campo de identificação (CPF, E-mail ou Código SUSEP)
+  // 2. Campo de identificação (E-mail ou Usuário)
   const [identificador, setIdentificador] = useState('');
 
   // 3. Campo de senha
@@ -43,19 +46,32 @@ export default function Login() {
   // 7. Mensagem de erro para validações simples
   const [erro, setErro] = useState('');
 
+  // Se já estiver logado, redireciona para o painel correspondente
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    const perfil = localStorage.getItem('perfil');
+    if (token) {
+      if (perfil === 'ROLE_CORRETOR') {
+        navigate('/dashboard/corretor');
+      } else {
+        navigate('/dashboard/cliente');
+      }
+    }
+  }, [navigate]);
+
   // ==========================================
-  // FUNÇÕES DE SUBMISSÃO
+  // FUNÇÕES DE SUBMISSÃO COM VALIDAÇÃO CRUZADA
   // ==========================================
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
 
     // Validação básica dos campos
     if (!identificador.trim()) {
       setErro(
         tipoAcesso === 'cliente'
-          ? 'Por favor, digite seu CPF ou E-mail.'
-          : 'Por favor, digite seu Código SUSEP ou E-mail profissional.'
+          ? 'Por favor, digite seu E-mail de cliente.'
+          : 'Por favor, digite seu E-mail profissional ou SUSEP.'
       );
       return;
     }
@@ -68,16 +84,57 @@ export default function Login() {
     setErro('');
     setCarregando(true);
 
-    // Simulação de login
-    setTimeout(() => {
+    try {
+      const response = await authLogin({
+        id: null,
+        nome: '',
+        usuario: identificador.trim(),
+        senha: senha,
+        foto: '',
+        token: '',
+        perfil: tipoAcesso === 'cliente' ? 'ROLE_CLIENTE' : 'ROLE_CORRETOR'
+      } as any);
+
+      if (!response || !response.token) {
+        setErro('Credenciais inválidas. Verifique seu usuário e senha.');
+        setCarregando(false);
+        return;
+      }
+
+      const perfil = response.perfil || 'ROLE_CLIENTE';
+
+      // ==========================================
+      // VALIDAÇÃO CRUZADA E REDIRECIONAMENTO INTELIGENTE
+      // ==========================================
+      if (tipoAcesso === 'cliente') {
+        if (perfil === 'ROLE_CORRETOR') {
+          ToastAlerta(
+            'Perfil de Corretor identificado! Redirecionando para o Painel do Corretor...',
+            'info'
+          );
+          navigate('/dashboard/corretor');
+        } else {
+          ToastAlerta('Bem-vindo ao Painel do Segurado!', 'sucesso');
+          navigate('/dashboard/cliente');
+        }
+      } else {
+        // tipoAcesso === 'corretor'
+        if (perfil === 'ROLE_CLIENTE') {
+          ToastAlerta(
+            'Perfil de Cliente identificado! Redirecionando para o Painel do Segurado...',
+            'info'
+          );
+          navigate('/dashboard/cliente');
+        } else {
+          ToastAlerta('Bem-vindo ao Painel do Corretor Parceiro!', 'sucesso');
+          navigate('/dashboard/corretor');
+        }
+      }
+    } catch {
+      setErro('Erro ao processar login. Verifique seus dados e tente novamente.');
+    } finally {
       setCarregando(false);
-      alert(
-        `Login realizado com sucesso como ${
-          tipoAcesso === 'cliente' ? 'Cliente / Segurado' : 'Corretor Parceiro'
-        }!`
-      );
-      navigate('/');
-    }, 1000);
+    }
   };
 
   // Função para simular o login com o Google
@@ -88,11 +145,11 @@ export default function Login() {
   return (
     // Fundo neutro e moderno da página
     <div className="min-h-screen w-full bg-zinc-100 flex flex-col items-center justify-center p-4 sm:p-6 lg:p-8">
-      
+
       {/* Barra superior de navegação para voltar à Home */}
       <div className="w-full max-w-5xl mb-4 flex items-center justify-between text-zinc-600 text-sm">
-        <Link 
-          to="/" 
+        <Link
+          to="/"
           className="inline-flex items-center gap-2 hover:text-red-600 transition-colors duration-200 font-medium"
         >
           <ArrowLeft size={18} weight="bold" />
@@ -105,11 +162,11 @@ export default function Login() {
 
       {/* CARD PRINCIPAL (DESIGN DE 2 COLUNAS PREENCHIDO E ELEGANTE) */}
       <div className="w-full max-w-5xl bg-white rounded-3xl shadow-2xl shadow-zinc-300/60 border border-zinc-200/80 overflow-hidden grid grid-cols-1 lg:grid-cols-12">
-        
+
         {/* ========================================================= */}
         {/* COLUNA ESQUERDA: APRESENTAÇÃO INSTITUCIONAL (DARK)        */}
         {/* ========================================================= */}
-        <div 
+        <div
           className="lg:col-span-6 p-8 lg:p-10 flex flex-col justify-between relative text-white bg-zinc-950 overflow-hidden"
           style={{
             backgroundImage: `linear-gradient(to bottom, rgba(12, 14, 18, 0.76), rgba(9, 10, 14, 0.95)), url('https://images.unsplash.com/photo-1503376780353-7e6692767b70?auto=format&fit=crop&w=1200&q=80')`,
@@ -225,16 +282,15 @@ export default function Login() {
                   setTipoAcesso('cliente');
                   setErro('');
                 }}
-                className={`flex-1 py-2.5 px-3 rounded-xl text-xs sm:text-sm font-semibold flex items-center justify-center gap-2 transition-all duration-200 cursor-pointer ${
-                  tipoAcesso === 'cliente'
-                    ? 'bg-white text-zinc-900 shadow-sm border border-zinc-200/80'
-                    : 'text-zinc-500 hover:text-zinc-900'
-                }`}
+                className={`flex-1 py-2.5 px-3 rounded-xl text-xs sm:text-sm font-semibold flex items-center justify-center gap-2 transition-all duration-200 cursor-pointer ${tipoAcesso === 'cliente'
+                  ? 'bg-white text-zinc-900 shadow-sm border border-zinc-200/80'
+                  : 'text-zinc-500 hover:text-zinc-900'
+                  }`}
               >
-                <Car 
-                  size={18} 
-                  weight="fill" 
-                  className={tipoAcesso === 'cliente' ? 'text-red-600' : 'text-zinc-400'} 
+                <Car
+                  size={18}
+                  weight="fill"
+                  className={tipoAcesso === 'cliente' ? 'text-red-600' : 'text-zinc-400'}
                 />
                 <span>Sou Cliente</span>
               </button>
@@ -245,16 +301,15 @@ export default function Login() {
                   setTipoAcesso('corretor');
                   setErro('');
                 }}
-                className={`flex-1 py-2.5 px-3 rounded-xl text-xs sm:text-sm font-semibold flex items-center justify-center gap-2 transition-all duration-200 cursor-pointer ${
-                  tipoAcesso === 'corretor'
-                    ? 'bg-white text-zinc-900 shadow-sm border border-zinc-200/80'
-                    : 'text-zinc-500 hover:text-zinc-900'
-                }`}
+                className={`flex-1 py-2.5 px-3 rounded-xl text-xs sm:text-sm font-semibold flex items-center justify-center gap-2 transition-all duration-200 cursor-pointer ${tipoAcesso === 'corretor'
+                  ? 'bg-white text-zinc-900 shadow-sm border border-zinc-200/80'
+                  : 'text-zinc-500 hover:text-zinc-900'
+                  }`}
               >
-                <Briefcase 
-                  size={18} 
-                  weight="fill" 
-                  className={tipoAcesso === 'corretor' ? 'text-red-600' : 'text-zinc-400'} 
+                <Briefcase
+                  size={18}
+                  weight="fill"
+                  className={tipoAcesso === 'corretor' ? 'text-red-600' : 'text-zinc-400'}
                 />
                 <span>Sou Corretor</span>
               </button>
@@ -269,11 +324,11 @@ export default function Login() {
 
             {/* Formulário de Login */}
             <form onSubmit={handleLogin} className="space-y-4">
-              
+
               {/* Campo 1: Identificador (muda o texto conforme o perfil selecionado) */}
               <div>
                 <label className="block text-xs font-semibold text-zinc-700 mb-1.5">
-                  {tipoAcesso === 'cliente' ? 'CPF ou E-mail cadastrado' : 'Código SUSEP ou E-mail profissional'}
+                  {tipoAcesso === 'cliente' ? 'E-mail cadastrado' : 'Código SUSEP ou E-mail profissional'}
                 </label>
                 <div className="relative flex items-center">
                   <span className="absolute left-3.5 text-zinc-400">
@@ -285,7 +340,7 @@ export default function Login() {
                     onChange={(e) => setIdentificador(e.target.value)}
                     placeholder={
                       tipoAcesso === 'cliente'
-                        ? '000.000.000-00 ou seu@email.com'
+                        ? 'seu@email.com'
                         : 'SUSEP ou corretor@email.com'
                     }
                     className="w-full pl-10 pr-4 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl text-sm text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-red-600 focus:bg-white transition-all"
@@ -356,10 +411,10 @@ export default function Login() {
               {/* Botão Entrar na Conta */}
               <button
                 type="submit"
-                disabled={carregando}
+                disabled={carregando || authLoading}
                 className="w-full mt-2 py-3 px-4 bg-red-600 hover:bg-red-700 disabled:bg-red-400 text-white font-bold rounded-xl text-sm transition-all duration-200 flex items-center justify-center gap-2 shadow-lg shadow-red-600/25 cursor-pointer"
               >
-                {carregando ? (
+                {carregando || authLoading ? (
                   <span>Acessando...</span>
                 ) : (
                   <>

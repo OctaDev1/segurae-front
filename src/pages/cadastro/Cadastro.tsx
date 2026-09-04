@@ -15,6 +15,8 @@ import {
   Image,
   IdentificationCard,
 } from '@phosphor-icons/react';
+import { cadastrarUsuario } from '../../services/Service';
+import { ToastAlerta } from '../../utils/toastalerta/ToastAlerta';
 
 export default function Cadastro() {
   const navigate = useNavigate();
@@ -32,7 +34,7 @@ export default function Cadastro() {
   const [carregando, setCarregando] = useState(false);
   const [erro, setErro] = useState('');
 
-  const handleCadastro = (e: React.FormEvent) => {
+  const handleCadastro = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!nome.trim() || !email.trim() || !senha.trim() || !confirmarSenha.trim()) {
@@ -63,15 +65,29 @@ export default function Cadastro() {
     setErro('');
     setCarregando(true);
 
-    setTimeout(() => {
-      setCarregando(false);
-      alert(
-        `Conta de ${
-          tipoAcesso === 'cliente' ? 'Cliente' : 'Corretor'
-        } criada com sucesso! Faça seu login para continuar.`
-      );
+    try {
+      // Monta o payload dinâmico baseado no tipo de acesso
+      const dadosUsuario = {
+        id: 0,
+        nome: nome.trim(),
+        usuario: email.trim(),
+        senha: senha,
+        foto: fotoUrl.trim() || '',
+        perfil: tipoAcesso === 'cliente' ? 'ROLE_CLIENTE' : 'ROLE_CORRETOR',
+        // Se o seu back-end espera o CPF ou dados extras, inclua-os aqui caso a entidade possua esses atributos:
+        // cpfCnpj: cpfCnpj.trim(),
+        // dataNascimento: dataNascimento
+      };
+
+      await cadastrarUsuario('/usuarios/cadastrar', dadosUsuario, () => {});
+
+      ToastAlerta('Conta criada com sucesso! Faça seu login.', 'sucesso');
       navigate('/login');
-    }, 1200);
+    } catch (error) {
+      setErro('Erro ao cadastrar o usuário. Verifique se o e-mail já está cadastrado ou se os dados estão corretos.');
+    } finally {
+      setCarregando(false);
+    }
   };
 
   return (
