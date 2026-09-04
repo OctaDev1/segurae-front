@@ -8,6 +8,7 @@ const links = [
   { text: 'Coberturas', to: '/coberturas' },
   { text: 'Serviços', to: '/servicos' },
   { text: 'Contato', to: '/contato' },
+  { text: 'Apolices', to: '/apolices' },
 ];
 
 function Navbar() {
@@ -66,44 +67,36 @@ function Navbar() {
     setIsMenuOpen((prev) => !prev);
   };
 
-  // 1. Botão "Entrar"
+  // 1. Botão "Entrar" -> Direciona para a página de login
   const handleEntrar = () => {
     setIsMenuOpen(false);
-    if (usuario.token) {
-      // Já autenticado -> direciona para o Dashboard
-      navigate('/dashboard');
-    } else {
-      // Não autenticado -> direciona para a página de login
-      navigate('/login');
-    }
+    navigate('/login');
   };
 
-  // 2. Botão "Dashboard"
+  // 2. Botão "Dashboard" -> Verifica token e direciona para a listagem (/apolices)
   const handleDashboard = () => {
     setIsMenuOpen(false);
     if (!usuario.token) {
       // Não autenticado -> não permite acesso e exibe ToastAlert
-      ToastAlerta('Você precisa estar logado para acessar o Dashboard.', 'info');
+      ToastAlerta('Você precisa estar logado para acessar a Listagem.', 'erro');
       return;
     }
-    // Autenticado -> navegação normal para o Dashboard
-    navigate('/dashboard');
+    // Autenticado -> navegação para a listagem de apólices
+    navigate('/apolices');
   };
 
   // 3. Botão "Sair"
   const handleSair = () => {
     setIsMenuOpen(false);
     if (usuario.token) {
-      // Autenticado -> realiza logout, limpa dados, vai para Home e ToastAlert é exibido
       handleLogout();
       navigate('/');
     }
-    // Caso não esteja autenticado, nenhum erro ocorre
   };
 
   return (
     <nav
-      className="fixed top-6 left-1/2 -translate-x-1/2 w-[92%] max-w-6xl bg-white/90 backdrop-blur-md shadow-xl border border-zinc-200/60 rounded-full px-4 sm:px-6 py-3 flex items-center justify-between z-100 transition-all duration-300"
+      className="fixed top-6 left-1/2 -translate-x-1/2 w-[92%] max-w-6xl bg-white/90 backdrop-blur-md shadow-xl border border-zinc-200/60 rounded-full px-4 sm:px-6 py-3 flex items-center justify-between z-[100] transition-all duration-300"
     >
       <Link to="/" className="flex items-center shrink-0">
         <img
@@ -162,7 +155,7 @@ function Navbar() {
         {/* Submenu Dropdown */}
         {isMenuOpen && (
           <div
-            className="absolute right-0 top-full mt-3 w-56 sm:w-64 bg-white/95 backdrop-blur-md rounded-2xl shadow-xl shadow-zinc-900/10 border border-zinc-200/70 p-2 z-110 animate-in fade-in zoom-in-95 duration-150 origin-top-right"
+            className="absolute right-0 top-full mt-3 w-56 sm:w-64 bg-white/95 backdrop-blur-md rounded-2xl shadow-xl shadow-zinc-900/10 border border-zinc-200/70 p-2 z-[110] animate-in fade-in zoom-in-95 duration-150 origin-top-right"
             role="menu"
             aria-orientation="vertical"
           >
@@ -184,7 +177,7 @@ function Navbar() {
               </div>
             )}
 
-            {/* Opção 1: Entrar */}
+            {/* Opção 1: Entrar (Vai para /login) */}
             <button
               type="button"
               onClick={handleEntrar}
@@ -210,12 +203,12 @@ function Navbar() {
               <div>
                 <span className="block font-semibold">Entrar</span>
                 <span className="block text-[11px] text-zinc-400 font-normal">
-                  {usuario.token ? 'Ir para o Dashboard' : 'Acesse sua conta'}
+                  Acesse sua conta
                 </span>
               </div>
             </button>
 
-            {/* Opção 2: Dashboard */}
+            {/* Opção 2: Dashboard (Vai para a Listagem em /apolices) */}
             <button
               type="button"
               onClick={handleDashboard}
@@ -239,9 +232,9 @@ function Navbar() {
                 </svg>
               </div>
               <div>
-                <span className="block font-semibold">Dashboard</span>
+                <span className="block font-semibold">Minhas Apólices</span>
                 <span className="block text-[11px] text-zinc-400 font-normal">
-                  Painel do segurado
+                  Listagem de apólices
                 </span>
               </div>
             </button>

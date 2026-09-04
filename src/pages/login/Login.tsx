@@ -410,8 +410,8 @@ export default function Login() {
           <div className="pt-6 mt-6 border-t border-zinc-100 text-center space-y-2">
             <p className="text-xs text-zinc-600">
               Ainda não é cliente?{' '}
-              <Link to="/coberturas" className="text-red-600 font-bold hover:underline">
-                Simular seguro agora &gt;
+              <Link to="/cadastro" className="text-red-600 font-bold hover:underline">
+                Criar conta &gt;
               </Link>
             </p>
 
