@@ -15,6 +15,8 @@ import DashboardCliente from './pages/dashboard/DashboardCliente';
 import DashboardCorretor from './pages/dashboard/DashboardCorretor';
 import ChatbotFlutuante from './components/chatbot/ChatbotFlutuante';
 
+import AreaCorretor from './pages/corretor/AreaCorretor';
+
 function DashboardRedirect() {
   const perfil = localStorage.getItem('perfil');
   if (perfil === 'ROLE_CORRETOR') {
@@ -58,10 +60,24 @@ function App() {
           <Route
             path="/apolices"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute allowedRoles={['ROLE_CLIENTE']}>
                 <ListagemApolices />
               </ProtectedRoute>
             }
+          />
+
+          <Route
+            path="/corretor"
+            element={
+              <ProtectedRoute allowedRoles={['ROLE_CORRETOR']}>
+                <AreaCorretor />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/corretor/apolices"
+            element={<Navigate to="/corretor" replace />}
           />
 
           <Route
@@ -90,6 +106,9 @@ function App() {
               </ProtectedRoute>
             }
           />
+
+          {/* Rota Fallback para prevenir qualquer tela branca em URLs desconhecidas */}
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>
     </AuthProvider>

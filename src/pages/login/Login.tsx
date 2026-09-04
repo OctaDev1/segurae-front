@@ -89,15 +89,17 @@ export default function Login() {
     setCarregando(true);
 
     try {
+      const perfilDesejado = tipoAcesso === 'corretor' ? 'ROLE_CORRETOR' : 'ROLE_CLIENTE';
       const response = await authLogin({
-        id: null,
+        id: 0,
         nome: '',
         usuario: identificador.trim(),
+        email: identificador.trim(),
         senha: senha,
         foto: '',
         token: '',
-        perfil: tipoAcesso === 'cliente' ? 'ROLE_CLIENTE' : 'ROLE_CORRETOR'
-      } as any);
+        perfil: perfilDesejado,
+      });
 
       if (!response || !response.token) {
         setErro('Credenciais inválidas. Verifique seu usuário e senha.');
@@ -105,7 +107,7 @@ export default function Login() {
         return;
       }
 
-      const perfil = response.perfil || 'ROLE_CLIENTE';
+      const perfil = response.perfil || localStorage.getItem('perfil') || perfilDesejado;
 
       // ==========================================
       // VALIDAÇÃO CRUZADA E REDIRECIONAMENTO INTELIGENTE

@@ -22,8 +22,10 @@ import {
   ArrowLeft,
   Check,
 } from '@phosphor-icons/react';
+import axios from 'axios';
 import { AuthContext } from '../../contexts/AuthContext';
 import type Apolice from '../../models/Apolice';
+import type Cliente from '../../models/Cliente';
 import { buscar, cadastrar, atualizar, deletar, getAuthHeader } from '../../services/Service';
 import { ToastAlerta } from '../../utils/toastalerta/ToastAlerta';
 
@@ -179,8 +181,9 @@ export default function AreaCorretor() {
   const navigate = useNavigate();
   const { usuario, handleLogout } = useContext(AuthContext);
 
-  const isAutenticado = Boolean(usuario && usuario.token && usuario.token.trim() !== '');
-  const isCorretor = isAutenticado && (usuario.perfil === 'ROLE_CORRETOR' || usuario.perfil === 'corretor');
+  const perfilEfetivo = usuario.perfil || localStorage.getItem('perfil') || '';
+  const isAutenticado = Boolean((usuario?.token || localStorage.getItem('token'))?.trim());
+  const isCorretor = isAutenticado && (perfilEfetivo === 'ROLE_CORRETOR' || perfilEfetivo === 'corretor');
 
   // Proteção da rota do Corretor
   useEffect(() => {
@@ -198,7 +201,8 @@ export default function AreaCorretor() {
     const salvas = localStorage.getItem('segurae_apolices_corretor');
     if (salvas) {
       try {
-        return JSON.parse(salvas);
+        const parsed = JSON.parse(salvas);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
       } catch {
         return APOLICES_INICIAIS_CORRETOR;
       }
@@ -236,31 +240,40 @@ export default function AreaCorretor() {
     setCarregando(true);
     try {
       const header = getAuthHeader(usuario?.token);
-      const dados = await buscar('/apolices', undefined, header);
-      if (Array.isArray(dados) && dados.length > 0) {
-        setApolices(dados);
-        setStatusApi('online');
-      } else {
+      const dados = await buscar<Apolice[]>('/apolices', undefined, header);
+      if (Array.isArray(dados)) {
+        if (dados.length > 0) {
+          setApolices(dados);
+        }
         setStatusApi('online');
       }
-    } catch {
+    } catch (err) {
       setStatusApi('offline');
-      // Continua usando os dados do estado/localStorage sem interromper a navegação
+      if (axios.isAxiosError(err)) {
+        if (err.response?.status === 401) {
+          ToastAlerta('Sessão expirada. Faça login novamente.', 'erro');
+          navigate('/login', { state: { tipoAcesso: 'corretor' }, replace: true });
+        } else if (err.response?.status === 403) {
+          ToastAlerta('Acesso restrito: permissão insuficiente para apólices.', 'erro');
+        } else {
+          ToastAlerta(`Servidor offline ou inacessível (${err.response?.status || 'rede'}). Utilizando carteira local.`, 'info');
+        }
+      }
     } finally {
       setCarregando(false);
     }
-  }, [usuario]);
+  }, [usuario, navigate]);
 
   useEffect(() => {
     let ativo = true;
     const buscarInicial = async () => {
       try {
         const header = getAuthHeader(usuario?.token);
-        const dados = await buscar('/apolices', undefined, header);
-        if (ativo && Array.isArray(dados) && dados.length > 0) {
-          setApolices(dados);
-          setStatusApi('online');
-        } else if (ativo) {
+        const dados = await buscar<Apolice[]>('/apolices', undefined, header);
+        if (ativo && Array.isArray(dados)) {
+          if (dados.length > 0) {
+            setApolices(dados);
+          }
           setStatusApi('online');
         }
       } catch {
@@ -377,20 +390,30 @@ export default function AreaCorretor() {
 
     try {
       if (apoliceParaExcluir.id) {
-        try {
-          const header = getAuthHeader(usuario?.token);
-          await deletar(`/apolices/${apoliceParaExcluir.id}`, header);
-        } catch {
-          // Mantém integridade local mesmo se o backend estiver inacessível
-        }
+        const header = getAuthHeader(usuario?.token);
+        await deletar(`/apolices/${apoliceParaExcluir.id}`, header);
       }
 
       setApolices((prev) => prev.filter((item) => item.id !== apoliceParaExcluir.id));
-      ToastAlerta(`Apólice ${apoliceParaExcluir.numeroApolice} excluída com sucesso!`, 'sucesso');
+      ToastAlerta(`Apólice ${apoliceParaExcluir.numeroApolice || apoliceParaExcluir.id} excluída com sucesso!`, 'sucesso');
       setModalExcluirAberto(false);
       setApoliceParaExcluir(null);
-    } catch {
-      ToastAlerta('Erro ao excluir apólice.', 'erro');
+    } catch (err) {
+      if (axios.isAxiosError(err)) {
+        const status = err.response?.status;
+        if (status === 404) {
+          setApolices((prev) => prev.filter((item) => item.id !== apoliceParaExcluir.id));
+          ToastAlerta('Apólice já removida ou inexistente no banco de dados.', 'info');
+          setModalExcluirAberto(false);
+          setApoliceParaExcluir(null);
+        } else if (status === 401 || status === 403) {
+          ToastAlerta('Você não tem permissão para excluir esta apólice.', 'erro');
+        } else {
+          ToastAlerta(`Erro ao excluir apólice (${status || 'falha de rede'}).`, 'erro');
+        }
+      } else {
+        ToastAlerta('Erro inesperado ao excluir apólice.', 'erro');
+      }
     } finally {
       setSalvando(false);
     }
@@ -406,12 +429,14 @@ export default function AreaCorretor() {
       setErroForm('Por favor, informe a marca e o modelo do veículo.');
       return;
     }
-    if (!formData.placa.trim() || formData.placa.trim().length !== 7) {
-      setErroForm('A placa deve conter exatamente 7 caracteres (ex: BRA2E19).');
+    const placaLimpa = formData.placa.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+    if (!placaLimpa || placaLimpa.length !== 7) {
+      setErroForm('A placa deve conter exatamente 7 caracteres alfanuméricos (ex: BRA2E19).');
       return;
     }
-    if (!formData.renavam.trim() || formData.renavam.trim().length < 9) {
-      setErroForm('O Renavam deve conter entre 9 e 11 dígitos.');
+    const renavamLimpo = formData.renavam.trim().replace(/\D/g, '');
+    if (!renavamLimpo || renavamLimpo.length < 9 || renavamLimpo.length > 11) {
+      setErroForm('O Renavam deve conter entre 9 e 11 dígitos numéricos.');
       return;
     }
     if (!formData.valorApolice || Number(formData.valorApolice) <= 0) {
@@ -432,71 +457,83 @@ export default function AreaCorretor() {
     }
 
     setSalvando(true);
-
-    const apolicePayload: Apolice = {
-      id: formData.id,
-      numeroApolice: formData.numeroApolice || `SEG-${new Date().getFullYear()}-${Math.floor(100000 + Math.random() * 900000)}`,
-      bemSegurado: formData.bemSegurado,
-      marcaModelo: formData.marcaModelo.trim(),
-      anoModelo: Number(formData.anoModelo) || 2024,
-      placa: formData.placa.trim().toUpperCase(),
-      renavam: formData.renavam.trim(),
-      valorApolice: Number(formData.valorApolice),
-      tipoCobertura: formData.tipoCobertura,
-      dataInicio: formData.dataInicio,
-      dataTermino: formData.dataTermino,
-      statusApolice: Number(formData.statusApolice),
-      cliente: {
-        id: formData.id ? apoliceSelecionada?.cliente?.id || formData.id : Date.now(),
-        nomeCompleto: formData.clienteNome.trim(),
-        email: formData.clienteEmail.trim() || 'cliente@segurae.com.br',
-        cpfCnpj: formData.clienteCpfCnpj.trim() || '000.000.000-00',
-        dataNascimento: formData.clienteDataNasc || '1990-01-01',
-      },
-      usuario: {
-        id: usuario.id || 1,
-        nome: usuario.nome || 'Mariana Silva (Corretora)',
-        email: usuario.usuario || 'mariana.corretora@segurae.com.br',
-        usuario: usuario.usuario || 'corretor@segurae.com.br',
-        perfil: 'ROLE_CORRETOR',
-      },
-    };
+    const header = getAuthHeader(usuario?.token);
 
     try {
-      const header = getAuthHeader(usuario?.token);
+      let clienteId = formData.id ? apoliceSelecionada?.cliente?.id : undefined;
+
+      // Se ainda não temos um ID de cliente existente e temos dados do cliente, cadastra o cliente
+      if (!clienteId && formData.clienteNome.trim()) {
+        try {
+          const resCliente = await cadastrar<Cliente>(
+            '/clientes/cadastrar',
+            {
+              nomeCompleto: formData.clienteNome.trim(),
+              email: formData.clienteEmail.trim() || 'cliente@segurae.com.br',
+              cpfCnpj: formData.clienteCpfCnpj.replace(/\D/g, '') || '12345678900',
+              dataNascimento: formData.clienteDataNasc || '1990-01-01',
+            },
+            undefined,
+            header
+          );
+          if (resCliente && resCliente.id) {
+            clienteId = resCliente.id;
+          }
+        } catch {
+          // Se falhar o cadastro de cliente, prossegue com ID existente ou fallback
+        }
+      }
+
+      const numApolice = formData.numeroApolice?.trim() || `SEG-${new Date().getFullYear()}-${Math.floor(100000 + Math.random() * 900000)}`;
+
+      const apolicePayload: Apolice = {
+        id: formData.id,
+        numeroApolice: numApolice,
+        bemSegurado: formData.bemSegurado,
+        marcaModelo: formData.marcaModelo.trim(),
+        anoModelo: Number(formData.anoModelo) || 2024,
+        placa: placaLimpa,
+        renavam: renavamLimpo,
+        valorApolice: Number(formData.valorApolice),
+        tipoCobertura: formData.tipoCobertura,
+        dataInicio: formData.dataInicio,
+        dataTermino: formData.dataTermino,
+        statusApolice: Number(formData.statusApolice),
+        cliente: {
+          id: clienteId || 1,
+          nomeCompleto: formData.clienteNome.trim(),
+          email: formData.clienteEmail.trim() || 'cliente@segurae.com.br',
+          cpfCnpj: formData.clienteCpfCnpj.trim() || '000.000.000-00',
+          dataNascimento: formData.clienteDataNasc || '1990-01-01',
+        },
+      };
 
       if (formData.id) {
-        // EDIÇÃO (PUT)
-        try {
-          await atualizar('/apolices', apolicePayload, undefined, header);
-        } catch {
-          // Fallback resiliente
-        }
-
+        // EDIÇÃO (PUT /apolices)
+        const respostaPut = await atualizar<Apolice>('/apolices', apolicePayload, undefined, header);
+        const apoliceAtualizada = (respostaPut && respostaPut.id) ? respostaPut : { ...apolicePayload, id: formData.id };
         setApolices((prev) =>
-          prev.map((item) => (item.id === formData.id ? { ...item, ...apolicePayload } : item))
+          prev.map((item) => (item.id === formData.id ? { ...item, ...apoliceAtualizada } : item))
         );
         ToastAlerta('Apólice atualizada com sucesso!', 'sucesso');
       } else {
-        // CRIAÇÃO (POST)
-        let apoliceCriada = apolicePayload;
-        try {
-          const respostaApi = await cadastrar('/apolices', apolicePayload, undefined, header);
-          if (respostaApi && respostaApi.id) {
-            apoliceCriada = respostaApi;
-          }
-        } catch {
-          // Fallback resiliente com ID temporário
-          apoliceCriada = { ...apolicePayload, id: Date.now() };
-        }
-
-        setApolices((prev) => [apoliceCriada, ...prev]);
+        // CRIAÇÃO (POST /apolices)
+        const respostaPost = await cadastrar<Apolice>('/apolices', apolicePayload, undefined, header);
+        const apoliceCriada = (respostaPost && respostaPost.id) ? respostaPost : { ...apolicePayload, id: Date.now() };
+        setApolices((prev) => [apoliceCriada, ...prev.filter((i) => i.id !== apoliceCriada.id)]);
         ToastAlerta('Nova apólice cadastrada com sucesso!', 'sucesso');
       }
 
       setModalFormAberto(false);
-    } catch {
-      ToastAlerta('Ocorreu um erro ao salvar a apólice.', 'erro');
+    } catch (err) {
+      if (axios.isAxiosError(err)) {
+        const msg = err.response?.data?.message || err.response?.data?.erro || `Erro ${err.response?.status || ''}: Verifique os dados da apólice.`;
+        setErroForm(typeof msg === 'string' ? msg : 'Erro ao processar apólice.');
+        ToastAlerta(typeof msg === 'string' ? msg : 'Erro na requisição da apólice.', 'erro');
+      } else {
+        setErroForm('Erro inesperado ao salvar apólice.');
+        ToastAlerta('Erro inesperado ao salvar apólice.', 'erro');
+      }
     } finally {
       setSalvando(false);
     }
@@ -531,7 +568,14 @@ export default function AreaCorretor() {
   };
 
   if (!isAutenticado || !isCorretor) {
-    return null;
+    return (
+      <div className="min-h-screen bg-zinc-50 flex items-center justify-center">
+        <div className="text-center p-8 bg-white rounded-3xl border border-zinc-200 shadow-sm max-w-md">
+          <div className="w-12 h-12 border-4 border-red-600 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+          <p className="text-zinc-700 font-semibold text-sm">Verificando credenciais do corretor...</p>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -595,10 +639,17 @@ export default function AreaCorretor() {
             </div>
 
             <Link
+              to="/dashboard/corretor"
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-zinc-700 hover:text-red-600 hover:bg-red-50 border border-zinc-200 transition-colors"
+            >
+              <ArrowLeft size={16} weight="bold" />
+              <span>Painel do Corretor</span>
+            </Link>
+
+            <Link
               to="/"
               className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-zinc-600 hover:text-zinc-900 hover:bg-zinc-100 border border-zinc-200 transition-colors"
             >
-              <ArrowLeft size={16} weight="bold" />
               <span className="hidden sm:inline">Voltar ao Site</span>
             </Link>
 

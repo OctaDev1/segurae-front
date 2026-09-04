@@ -14,6 +14,7 @@ import {
   CheckCircle,
   WarningCircle,
   ArrowSquareOut,
+  ArrowLeft,
 } from '@phosphor-icons/react';
 import { AuthContext } from '../../contexts/AuthContext';
 import type Apolice from '../../models/Apolice';
@@ -104,8 +105,9 @@ export default function ListagemApolices() {
   const navigate = useNavigate();
   const { usuario, handleLogout } = useContext(AuthContext);
 
-  const isAutenticado = Boolean(usuario && usuario.token && usuario.token.trim() !== '');
-  const isCliente = isAutenticado && (usuario.perfil === 'ROLE_CLIENTE' || usuario.perfil === 'cliente');
+  const perfilEfetivo = usuario.perfil || localStorage.getItem('perfil') || '';
+  const isAutenticado = Boolean((usuario?.token || localStorage.getItem('token'))?.trim());
+  const isCliente = isAutenticado && (perfilEfetivo === 'ROLE_CLIENTE' || perfilEfetivo === 'cliente');
 
   // Proteção da rota da Área do Cliente
   useEffect(() => {
@@ -155,7 +157,14 @@ export default function ListagemApolices() {
   const totalAtivas = apolices.filter((a) => a.statusApolice === 1).length;
 
   if (!isAutenticado || !isCliente) {
-    return null;
+    return (
+      <div className="min-h-screen bg-zinc-50 flex items-center justify-center">
+        <div className="text-center p-8 bg-white rounded-3xl border border-zinc-200 shadow-sm max-w-md">
+          <div className="w-12 h-12 border-4 border-red-600 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+          <p className="text-zinc-700 font-semibold text-sm">Verificando credenciais do segurado...</p>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -188,6 +197,14 @@ export default function ListagemApolices() {
                 <p className="text-[11px] text-zinc-500">{usuario.usuario || usuario.email || 'carlos.mendes@email.com'}</p>
               </div>
             </div>
+
+            <Link
+              to="/dashboard/cliente"
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-zinc-700 hover:text-red-600 hover:bg-red-50 border border-zinc-200 transition-colors"
+            >
+              <ArrowLeft size={16} weight="bold" />
+              <span>Meu Painel</span>
+            </Link>
 
             <button
               onClick={() => {

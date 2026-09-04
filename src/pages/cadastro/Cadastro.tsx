@@ -83,7 +83,7 @@ export default function Cadastro() {
 
       ToastAlerta('Conta criada com sucesso! Faça seu login.', 'sucesso');
       navigate('/login');
-    } catch (error) {
+    } catch {
       setErro('Erro ao cadastrar o usuário. Verifique se o e-mail já está cadastrado ou se os dados estão corretos.');
     } finally {
       setCarregando(false);

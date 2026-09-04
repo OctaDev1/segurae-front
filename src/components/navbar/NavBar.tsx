@@ -68,9 +68,10 @@ function Navbar() {
     setIsMenuOpen((prev) => !prev);
   };
 
-  const isAutenticado = Boolean(usuario && usuario.token && usuario.token.trim() !== '');
-  const isCliente = isAutenticado && (usuario.perfil === 'ROLE_CLIENTE' || usuario.perfil === 'cliente');
-  const isCorretor = isAutenticado && (usuario.perfil === 'ROLE_CORRETOR' || usuario.perfil === 'corretor');
+  const perfilEfetivo = usuario.perfil || localStorage.getItem('perfil') || '';
+  const isAutenticado = Boolean((usuario?.token || localStorage.getItem('token'))?.trim());
+  const isCliente = isAutenticado && (perfilEfetivo === 'ROLE_CLIENTE' || perfilEfetivo === 'cliente');
+  const isCorretor = isAutenticado && (perfilEfetivo === 'ROLE_CORRETOR' || perfilEfetivo === 'corretor');
 
   // 1. Opção "Entrar"
   const handleEntrar = () => {
@@ -79,10 +80,10 @@ function Navbar() {
       navigate('/login');
     } else if (isCorretor) {
       ToastAlerta('Você já está autenticado como Corretor.', 'info');
-      navigate('/corretor');
+      navigate('/dashboard/corretor');
     } else {
       ToastAlerta('Você já está autenticado como Cliente.', 'info');
-      navigate('/apolices');
+      navigate('/dashboard/cliente');
     }
   };
 
@@ -121,14 +122,13 @@ function Navbar() {
     navigate('/');
   };
 
-  // 5. Opção "Meu Painel" (Direciona de acordo com o perfil logado)
+  // 5. Opção "Meu Painel" (Direciona para o Dashboard correspondente)
   const handleMeuPainel = () => {
     setIsMenuOpen(false);
-    const perfilAtual = usuario.perfil || localStorage.getItem('perfil');
-    if (perfilAtual === 'ROLE_CORRETOR' || perfilAtual === 'corretor') {
-      navigate('/corretor');
+    if (isCorretor) {
+      navigate('/dashboard/corretor');
     } else {
-      navigate('/apolices');
+      navigate('/dashboard/cliente');
     }
   };
 
@@ -244,7 +244,7 @@ function Navbar() {
                 <div>
                   <span className="block font-semibold">Meu Painel</span>
                   <span className="block text-[11px] text-zinc-400 font-normal">
-                    {(usuario.perfil || localStorage.getItem('perfil')) === 'ROLE_CORRETOR' ? 'Área do Corretor' : 'Área do Segurado'}
+                    {isCorretor ? 'Dashboard do Corretor' : 'Painel do Segurado'}
                   </span>
                 </div>
               </button>

@@ -1,5 +1,5 @@
 import axios from "axios";
-import { createContext, useRef, useState, type ReactNode } from "react";
+import { createContext, useState, type ReactNode } from "react";
 
 import { login } from "../services/Service";
 import type UsuarioLogin from "../models/UsuarioLogin";
@@ -18,6 +18,7 @@ interface AuthProviderProps {
 	children: ReactNode;
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const AuthContext = createContext({} as AuthContextProps);
 
 export function AuthProvider({ children }: AuthProviderProps) {
@@ -46,26 +47,46 @@ export function AuthProvider({ children }: AuthProviderProps) {
 	});
 
 	const [isLoading, setIsLoading] = useState<boolean>(false);
-	const isLogout = useRef(false);
+	const [isLogout, setIsLogout] = useState<boolean>(false);
 
 	async function handleLogin(usuarioLogin: UsuarioLogin): Promise<UsuarioLogin | null> {
 		setIsLoading(true);
 
 		try {
-			const data: UsuarioLogin = await login(`/usuarios/logar`, usuarioLogin, setUsuario);
+			const payload = {
+				...usuarioLogin,
+				usuario: usuarioLogin.usuario || usuarioLogin.email || "",
+			};
+
+			const data: UsuarioLogin = await login(`/usuarios/logar`, payload, setUsuario);
 
 			if (data && data.token) {
-				localStorage.setItem("token", data.token);
-				localStorage.setItem("perfil", data.perfil || "");
-				localStorage.setItem("nome", data.nome || "");
-				localStorage.setItem("usuario", data.usuario || "");
-				localStorage.setItem("id", String(data.id || "0"));
-				localStorage.setItem("foto", data.foto || "");
+				const resolvedPerfil = data.perfil || usuarioLogin.perfil || localStorage.getItem("perfil") || "ROLE_CLIENTE";
+				const resolvedNome = data.nome || usuarioLogin.nome || "";
+				const resolvedUsuario = data.usuario || usuarioLogin.usuario || "";
+				const resolvedId = String(data.id || usuarioLogin.id || "0");
+				const resolvedFoto = data.foto || data.fotoUrl || usuarioLogin.foto || "";
 
-				setUsuario(data);
-				isLogout.current = false;
+				localStorage.setItem("token", data.token);
+				localStorage.setItem("perfil", resolvedPerfil);
+				localStorage.setItem("nome", resolvedNome);
+				localStorage.setItem("usuario", resolvedUsuario);
+				localStorage.setItem("id", resolvedId);
+				localStorage.setItem("foto", resolvedFoto);
+
+				const usuarioFinal: UsuarioLogin = {
+					...data,
+					id: Number(resolvedId),
+					perfil: resolvedPerfil,
+					nome: resolvedNome,
+					usuario: resolvedUsuario,
+					foto: resolvedFoto,
+				};
+
+				setUsuario(usuarioFinal);
+				setIsLogout(false);
 				ToastAlerta("Usuário Autenticado com sucesso!", "sucesso");
-				return data;
+				return usuarioFinal;
 			}
 			return null;
 		} catch (error) {
@@ -86,7 +107,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 	}
 
 	function handleLogout() {
-		isLogout.current = true;
+		setIsLogout(true);
 
 		localStorage.removeItem("token");
 		localStorage.removeItem("perfil");
