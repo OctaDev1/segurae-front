@@ -79,10 +79,10 @@ function Navbar() {
       navigate('/login');
     } else if (isCorretor) {
       ToastAlerta('Você já está autenticado como Corretor.', 'info');
-      navigate('/corretor');
+      navigate('/dashboard/corretor');
     } else {
       ToastAlerta('Você já está autenticado como Cliente.', 'info');
-      navigate('/apolices');
+      navigate('/dashboard/cliente');
     }
   };
 
@@ -106,7 +106,7 @@ function Navbar() {
       ToastAlerta('Faça login como Corretor para acessar a Área do Corretor.', 'info');
       navigate('/login', { state: { tipoAcesso: 'corretor' } });
     } else if (isCorretor) {
-      navigate('/corretor');
+      navigate('/corretor/apolices');
     } else {
       ToastAlerta('Acesso negado: Seu perfil é de Cliente e não possui permissão para a Área do Corretor.', 'erro');
     }
@@ -126,9 +126,9 @@ function Navbar() {
     setIsMenuOpen(false);
     const perfilAtual = usuario.perfil || localStorage.getItem('perfil');
     if (perfilAtual === 'ROLE_CORRETOR' || perfilAtual === 'corretor') {
-      navigate('/corretor');
+      navigate('/dashboard/corretor');
     } else {
-      navigate('/apolices');
+      navigate('/dashboard/cliente');
     }
   };
 

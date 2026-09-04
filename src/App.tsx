@@ -14,6 +14,7 @@ import ProtectedRoute from './components/route/ProtectedRoute';
 import DashboardCliente from './pages/dashboard/DashboardCliente';
 import DashboardCorretor from './pages/dashboard/DashboardCorretor';
 import ChatbotFlutuante from './components/chatbot/ChatbotFlutuante';
+import AreaCorretor from './pages/corretor/AreaCorretor';
 
 function DashboardRedirect() {
   const perfil = localStorage.getItem('perfil');
@@ -87,6 +88,15 @@ function App() {
             element={
               <ProtectedRoute allowedRoles={['ROLE_CORRETOR']}>
                 <DashboardCorretor />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/corretor/apolices"
+            element={
+              <ProtectedRoute allowedRoles={['ROLE_CORRETOR']}>
+                <AreaCorretor />
               </ProtectedRoute>
             }
           />

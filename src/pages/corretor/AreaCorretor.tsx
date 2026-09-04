@@ -24,8 +24,11 @@ import {
 } from '@phosphor-icons/react';
 import { AuthContext } from '../../contexts/AuthContext';
 import type Apolice from '../../models/Apolice';
-import { buscar, cadastrar, atualizar, deletar, getAuthHeader } from '../../services/Service';
+import { buscar, cadastrar, atualizar, deletar } from '../../services/Service';
 import { ToastAlerta } from '../../utils/toastalerta/ToastAlerta';
+
+const getAuthHeader = (token?: string) =>
+  token ? { headers: { Authorization: `Bearer ${token}` } } : {};
 
 // Dados iniciais para demonstração e resiliência offline/cold-start
 const APOLICES_INICIAIS_CORRETOR: Apolice[] = [
@@ -569,13 +572,6 @@ export default function AreaCorretor() {
                     : 'bg-zinc-400'
                 }`}
               />
-              <span className="text-zinc-500 font-medium">
-                {statusApi === 'online'
-                  ? 'API Seguraê Conectada'
-                  : statusApi === 'verificando'
-                  ? 'Verificando API...'
-                  : 'Modo Resiliente Ativo'}
-              </span>
             </div>
           </div>
 
