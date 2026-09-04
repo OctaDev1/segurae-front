@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useContext, useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   Car,
@@ -15,7 +15,9 @@ import {
   WarningCircle,
   ArrowSquareOut,
 } from '@phosphor-icons/react';
+import { AuthContext } from '../../contexts/AuthContext';
 import type Apolice from '../../models/Apolice';
+import { ToastAlerta } from '../../utils/toastalerta/ToastAlerta';
 
 const APOLICES_INICIAIS: Apolice[] = [
   {
@@ -100,6 +102,21 @@ const APOLICES_INICIAIS: Apolice[] = [
 
 export default function ListagemApolices() {
   const navigate = useNavigate();
+  const { usuario, handleLogout } = useContext(AuthContext);
+
+  const isAutenticado = Boolean(usuario && usuario.token && usuario.token.trim() !== '');
+  const isCliente = isAutenticado && (usuario.perfil === 'ROLE_CLIENTE' || usuario.perfil === 'cliente');
+
+  // Proteção da rota da Área do Cliente
+  useEffect(() => {
+    if (!isAutenticado) {
+      ToastAlerta('Você precisa estar logado para acessar a Área do Cliente.', 'info');
+      navigate('/login', { state: { tipoAcesso: 'cliente' }, replace: true });
+    } else if (!isCliente) {
+      ToastAlerta('Acesso negado: Seu perfil é de Corretor e não possui permissão para a Área do Cliente.', 'erro');
+      navigate('/corretor', { replace: true });
+    }
+  }, [isAutenticado, isCliente, navigate]);
 
   const [apolices] = useState<Apolice[]>(APOLICES_INICIAIS);
   const [busca, setBusca] = useState('');
@@ -137,6 +154,10 @@ export default function ListagemApolices() {
 
   const totalAtivas = apolices.filter((a) => a.statusApolice === 1).length;
 
+  if (!isAutenticado || !isCliente) {
+    return null;
+  }
+
   return (
     <div className="min-h-screen bg-zinc-50 text-zinc-900">
       <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-zinc-200 px-6 py-4 shadow-xs">
@@ -159,18 +180,18 @@ export default function ListagemApolices() {
 
           <div className="flex items-center gap-4">
             <div className="hidden sm:flex items-center gap-3 pr-4 border-r border-zinc-200">
-              <div className="w-9 h-9 rounded-full bg-red-100 text-red-600 flex items-center justify-center font-bold text-sm">
-                CE
+              <div className="w-9 h-9 rounded-full bg-red-100 text-red-600 flex items-center justify-center font-bold text-sm uppercase">
+                {usuario.nome ? usuario.nome.charAt(0) : 'C'}
               </div>
               <div className="text-left">
-                <p className="text-xs font-bold text-zinc-900">Carlos Eduardo</p>
-                <p className="text-[11px] text-zinc-500">carlos.mendes@email.com</p>
+                <p className="text-xs font-bold text-zinc-900">{usuario.nome || 'Carlos Eduardo'}</p>
+                <p className="text-[11px] text-zinc-500">{usuario.usuario || usuario.email || 'carlos.mendes@email.com'}</p>
               </div>
             </div>
 
             <button
               onClick={() => {
-                alert('Você saiu da sua conta.');
+                handleLogout();
                 navigate('/login');
               }}
               className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold text-zinc-600 hover:text-red-600 hover:bg-red-50 border border-zinc-200 transition-colors cursor-pointer"

@@ -179,6 +179,20 @@ export default function AreaCorretor() {
   const navigate = useNavigate();
   const { usuario, handleLogout } = useContext(AuthContext);
 
+  const isAutenticado = Boolean(usuario && usuario.token && usuario.token.trim() !== '');
+  const isCorretor = isAutenticado && (usuario.perfil === 'ROLE_CORRETOR' || usuario.perfil === 'corretor');
+
+  // Proteção da rota do Corretor
+  useEffect(() => {
+    if (!isAutenticado) {
+      ToastAlerta('Você precisa estar logado para acessar a Área do Corretor.', 'info');
+      navigate('/login', { state: { tipoAcesso: 'corretor' }, replace: true });
+    } else if (!isCorretor) {
+      ToastAlerta('Acesso negado: Seu perfil é de Cliente e não possui permissão para a Área do Corretor.', 'erro');
+      navigate('/apolices', { replace: true });
+    }
+  }, [isAutenticado, isCorretor, navigate]);
+
   // Estados principais
   const [apolices, setApolices] = useState<Apolice[]>(() => {
     const salvas = localStorage.getItem('segurae_apolices_corretor');
@@ -515,6 +529,10 @@ export default function AreaCorretor() {
         );
     }
   };
+
+  if (!isAutenticado || !isCorretor) {
+    return null;
+  }
 
   return (
     <div className="min-h-screen bg-zinc-50 text-zinc-900 font-sans">

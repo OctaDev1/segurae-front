@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useContext, useEffect, useState } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   Car,
   Briefcase,
@@ -14,17 +14,36 @@ import {
   ArrowLeft,
   Key,
 } from '@phosphor-icons/react';
-import { ToastAlerta } from '../../utils/toastalerta/ToastAlerta';
+import { AuthContext } from '../../contexts/AuthContext';
 
 export default function Login() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const { usuario, handleLogin: authLogin, isLoading: authLoading } = useContext(AuthContext);
+
+  const isAutenticado = Boolean(usuario && usuario.token && usuario.token.trim() !== '');
+  const isCorretor = isAutenticado && (usuario.perfil === 'ROLE_CORRETOR' || usuario.perfil === 'corretor');
+
+  // Redireciona caso já esteja autenticado
+  useEffect(() => {
+    if (isAutenticado) {
+      if (isCorretor) {
+        navigate('/corretor', { replace: true });
+      } else {
+        navigate('/apolices', { replace: true });
+      }
+    }
+  }, [isAutenticado, isCorretor, navigate]);
 
   // ==========================================
   // ESTADOS DO FORMULÁRIO (ESTILO JÚNIOR)
   // ==========================================
 
   // 1. Tipo de login ativo: 'cliente' (segurado) ou 'corretor'
-  const [tipoAcesso, setTipoAcesso] = useState<'cliente' | 'corretor'>('cliente');
+  const stateTipo = (location.state as { tipoAcesso?: 'cliente' | 'corretor' } | null)?.tipoAcesso;
+  const [tipoAcessoManual, setTipoAcessoManual] = useState<'cliente' | 'corretor' | null>(null);
+  const tipoAcesso = tipoAcessoManual ?? stateTipo ?? 'cliente';
+  const setTipoAcesso = (tipo: 'cliente' | 'corretor') => setTipoAcessoManual(tipo);
 
   // 2. Campo de identificação (CPF, E-mail ou Código SUSEP)
   const [identificador, setIdentificador] = useState('');
@@ -48,7 +67,7 @@ export default function Login() {
   // FUNÇÕES DE SUBMISSÃO
   // ==========================================
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
 
     // Validação básica dos campos
@@ -69,16 +88,32 @@ export default function Login() {
     setErro('');
     setCarregando(true);
 
-    setTimeout(() => {
-      setCarregando(false);
+    try {
+      const perfil = tipoAcesso === 'corretor' ? 'ROLE_CORRETOR' : 'ROLE_CLIENTE';
+      const nomeBase = identificador.includes('@')
+        ? identificador.split('@')[0]
+        : (tipoAcesso === 'corretor' ? 'Corretor Seguraê' : 'Carlos Eduardo');
+
+      await authLogin({
+        id: 1,
+        nome: nomeBase,
+        usuario: identificador,
+        senha: senha,
+        foto: '',
+        token: '',
+        perfil: perfil,
+      });
+
       if (tipoAcesso === 'corretor') {
-        ToastAlerta('Acesso concedido: Bem-vindo ao Painel do Corretor!', 'sucesso');
         navigate('/corretor');
       } else {
-        ToastAlerta('Acesso concedido: Bem-vindo à Área do Segurado!', 'sucesso');
         navigate('/apolices');
       }
-    }, 800);
+    } catch {
+      setErro('Falha ao autenticar. Por favor, tente novamente.');
+    } finally {
+      setCarregando(false);
+    }
   };
 
   // Função para simular o login com o Google
@@ -357,10 +392,10 @@ export default function Login() {
               {/* Botão Entrar na Conta */}
               <button
                 type="submit"
-                disabled={carregando}
+                disabled={carregando || authLoading}
                 className="w-full mt-2 py-3 px-4 bg-red-600 hover:bg-red-700 disabled:bg-red-400 text-white font-bold rounded-xl text-sm transition-all duration-200 flex items-center justify-center gap-2 shadow-lg shadow-red-600/25 cursor-pointer"
               >
-                {carregando ? (
+                {(carregando || authLoading) ? (
                   <span>Acessando...</span>
                 ) : (
                   <>

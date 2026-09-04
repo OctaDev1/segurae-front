@@ -91,7 +91,7 @@ function Navbar() {
     setIsMenuOpen(false);
     if (!isAutenticado) {
       ToastAlerta('Faça login como Cliente para acessar a Área do Cliente.', 'info');
-      navigate('/login');
+      navigate('/login', { state: { tipoAcesso: 'cliente' } });
     } else if (isCliente) {
       navigate('/apolices');
     } else {
@@ -104,7 +104,7 @@ function Navbar() {
     setIsMenuOpen(false);
     if (!isAutenticado) {
       ToastAlerta('Faça login como Corretor para acessar a Área do Corretor.', 'info');
-      navigate('/login');
+      navigate('/login', { state: { tipoAcesso: 'corretor' } });
     } else if (isCorretor) {
       navigate('/corretor');
     } else {
@@ -115,7 +115,9 @@ function Navbar() {
   // 4. Opção "Sair"
   const handleSair = () => {
     setIsMenuOpen(false);
-    handleLogout();
+    if (isAutenticado) {
+      handleLogout();
+    }
     navigate('/');
   };
 
