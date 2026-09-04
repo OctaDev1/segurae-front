@@ -5,12 +5,13 @@ import ScrollExpandIntro from './components/scrollexpand/ScrollExpandIntro';
 import Coberturas from './pages/cobertura/Cobertura';
 import Servicos from './pages/servicos/Servicos';
 import Login from './pages/login/Login';
+import Cadastro from './pages/cadastro/Cadastro';
+import ListagemApolices from './pages/apolices/ListagemApolices';
 
 function App() {
   return (
     <BrowserRouter>
       <Routes>
-        {/* Rota inicial com a animação de intro */}
         <Route
           path="/"
           element={
@@ -20,7 +21,6 @@ function App() {
           }
         />
         
-        {/* Rota /home também utilizando a intro */}
         <Route
           path="/home"
           element={
@@ -34,13 +34,8 @@ function App() {
         <Route path="/coberturas" element={<Coberturas />} />
         <Route path="/servicos" element={<Servicos />} />
         <Route path="/login" element={<Login />} />
-
-        {/* Futuras rotas entram normalmente sem a intro */}
-        {/*
-        
-        <Route path="/avaliacoes" element={<Avaliacoes />} />
-        <Route path="/contato" element={<Contato />} />
-        */}
+        <Route path="/cadastro" element={<Cadastro />} />
+        <Route path="/apolices" element={<ListagemApolices />} />
       </Routes>
     </BrowserRouter>
   );

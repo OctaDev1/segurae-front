@@ -4,9 +4,9 @@ export default interface Usuario {
   id?: number;
   nome: string;
   email: string;
-  usuario?: string; // Mantido para compatibilidade com o front-end existente
+  usuario?: string;
   senha?: string;
   fotoUrl?: string;
-  foto?: string; // Mantido para compatibilidade com o front-end existente
+  foto?: string;
   apolices?: Apolice[] | null;
 }

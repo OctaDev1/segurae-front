@@ -18,39 +18,17 @@ import {
 export default function Login() {
   const navigate = useNavigate();
 
-  // ==========================================
-  // ESTADOS DO FORMULÁRIO (ESTILO JÚNIOR)
-  // ==========================================
-
-  // 1. Tipo de login ativo: 'cliente' (segurado) ou 'corretor'
   const [tipoAcesso, setTipoAcesso] = useState<'cliente' | 'corretor'>('cliente');
-
-  // 2. Campo de identificação (CPF, E-mail ou Código SUSEP)
   const [identificador, setIdentificador] = useState('');
-
-  // 3. Campo de senha
   const [senha, setSenha] = useState('');
-
-  // 4. Alternar entre mostrar ou esconder a senha
   const [mostrarSenha, setMostrarSenha] = useState(false);
-
-  // 5. Opção de lembrar dispositivo / acesso
   const [lembrarDispositivo, setLembrarDispositivo] = useState(true);
-
-  // 6. Estado de carregamento do botão ao enviar
   const [carregando, setCarregando] = useState(false);
-
-  // 7. Mensagem de erro para validações simples
   const [erro, setErro] = useState('');
-
-  // ==========================================
-  // FUNÇÕES DE SUBMISSÃO
-  // ==========================================
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Validação básica dos campos
     if (!identificador.trim()) {
       setErro(
         tipoAcesso === 'cliente'
@@ -68,7 +46,6 @@ export default function Login() {
     setErro('');
     setCarregando(true);
 
-    // Simulação de login
     setTimeout(() => {
       setCarregando(false);
       alert(
@@ -76,20 +53,16 @@ export default function Login() {
           tipoAcesso === 'cliente' ? 'Cliente / Segurado' : 'Corretor Parceiro'
         }!`
       );
-      navigate('/');
+      navigate('/apolices');
     }, 1000);
   };
 
-  // Função para simular o login com o Google
   const handleGoogleLogin = () => {
     alert('Login social com o Google em processo de integração!');
   };
 
   return (
-    // Fundo neutro e moderno da página
     <div className="min-h-screen w-full bg-zinc-100 flex flex-col items-center justify-center p-4 sm:p-6 lg:p-8">
-      
-      {/* Barra superior de navegação para voltar à Home */}
       <div className="w-full max-w-5xl mb-4 flex items-center justify-between text-zinc-600 text-sm">
         <Link 
           to="/" 
@@ -103,12 +76,7 @@ export default function Login() {
         </span>
       </div>
 
-      {/* CARD PRINCIPAL (DESIGN DE 2 COLUNAS PREENCHIDO E ELEGANTE) */}
       <div className="w-full max-w-5xl bg-white rounded-3xl shadow-2xl shadow-zinc-300/60 border border-zinc-200/80 overflow-hidden grid grid-cols-1 lg:grid-cols-12">
-        
-        {/* ========================================================= */}
-        {/* COLUNA ESQUERDA: APRESENTAÇÃO INSTITUCIONAL (DARK)        */}
-        {/* ========================================================= */}
         <div 
           className="lg:col-span-6 p-8 lg:p-10 flex flex-col justify-between relative text-white bg-zinc-950 overflow-hidden"
           style={{
@@ -118,7 +86,6 @@ export default function Login() {
           }}
         >
           <div>
-            {/* Topo: Logo Seguraê e Badge de Atendimento */}
             <div className="flex items-center justify-between gap-4 mb-8">
               <div className="flex items-center gap-3">
                 <img
@@ -140,23 +107,19 @@ export default function Login() {
               </div>
             </div>
 
-            {/* Badge de Portal */}
             <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-red-600/25 border border-red-500/40 text-red-400 text-xs font-semibold mb-6">
               <ShieldCheck size={16} weight="fill" />
               <span>Portal Unificado de Serviços</span>
             </div>
 
-            {/* Título Principal */}
             <h1 className="text-3xl lg:text-4xl font-extrabold tracking-tight leading-tight mb-4">
               Sua tranquilidade sob controle em qualquer trajeto.
             </h1>
 
-            {/* Subtítulo */}
             <p className="text-zinc-300 text-sm leading-relaxed mb-8">
               Acesse suas apólices em tempo real, acione assistência emergencial, acompanhe sinistros e consulte pagamentos com rapidez e total autonomia.
             </p>
 
-            {/* Cards de Destaque / Diferenciais (Preenchem o visual) */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
               <div className="bg-zinc-900/80 border border-zinc-800 rounded-2xl p-3.5 backdrop-blur-md flex items-start gap-3">
                 <div className="w-8 h-8 rounded-xl bg-red-600/20 text-red-500 flex items-center justify-center shrink-0 mt-0.5">
@@ -180,7 +143,6 @@ export default function Login() {
             </div>
           </div>
 
-          {/* Rodapé da coluna esquerda: Suporte e Status */}
           <div className="pt-6 border-t border-zinc-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-zinc-400">
             <div className="flex items-center gap-2">
               <Headset size={16} className="text-red-500" weight="bold" />
@@ -195,12 +157,8 @@ export default function Login() {
           </div>
         </div>
 
-        {/* ========================================================= */}
-        {/* COLUNA DIREITA: FORMULÁRIO COM 2 OPÇÕES DE LOGIN          */}
-        {/* ========================================================= */}
         <div className="lg:col-span-6 p-8 lg:p-10 flex flex-col justify-between bg-white text-zinc-900">
           <div>
-            {/* Topo do Formulário: Tag de Acesso Seguro */}
             <div className="flex items-center justify-between mb-6">
               <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-50 border border-red-100 text-red-700 text-xs font-semibold">
                 <Key size={14} weight="bold" />
@@ -209,7 +167,6 @@ export default function Login() {
               <span className="text-xs text-zinc-400 font-medium">Seguraê Auto</span>
             </div>
 
-            {/* Cabeçalho */}
             <h2 className="text-2xl lg:text-3xl font-extrabold text-zinc-900 tracking-tight mb-2">
               Bem-vindo de volta
             </h2>
@@ -217,7 +174,6 @@ export default function Login() {
               Selecione seu perfil e informe seus dados para acessar sua conta.
             </p>
 
-            {/* ABAS DE LOGIN: CLIENTE / SEGURADO vs CORRETOR */}
             <div className="bg-zinc-100 p-1 rounded-2xl flex gap-1 mb-6">
               <button
                 type="button"
@@ -260,17 +216,13 @@ export default function Login() {
               </button>
             </div>
 
-            {/* Mensagem de erro */}
             {erro && (
               <div className="mb-4 p-3 rounded-xl bg-red-50 border border-red-200 text-red-600 text-xs font-medium">
                 {erro}
               </div>
             )}
 
-            {/* Formulário de Login */}
             <form onSubmit={handleLogin} className="space-y-4">
-              
-              {/* Campo 1: Identificador (muda o texto conforme o perfil selecionado) */}
               <div>
                 <label className="block text-xs font-semibold text-zinc-700 mb-1.5">
                   {tipoAcesso === 'cliente' ? 'CPF ou E-mail cadastrado' : 'Código SUSEP ou E-mail profissional'}
@@ -293,7 +245,6 @@ export default function Login() {
                 </div>
               </div>
 
-              {/* Campo 2: Senha */}
               <div>
                 <div className="flex items-center justify-between mb-1.5">
                   <label className="block text-xs font-semibold text-zinc-700">
@@ -332,7 +283,6 @@ export default function Login() {
                 </div>
               </div>
 
-              {/* Opção Lembrar Dispositivo */}
               <div className="flex items-center justify-between pt-1 text-xs">
                 <label className="flex items-center gap-2 cursor-pointer select-none text-zinc-600 font-medium">
                   <input
@@ -353,7 +303,6 @@ export default function Login() {
                 </button>
               </div>
 
-              {/* Botão Entrar na Conta */}
               <button
                 type="submit"
                 disabled={carregando}
@@ -369,7 +318,6 @@ export default function Login() {
                 )}
               </button>
 
-              {/* Separador "ou" */}
               <div className="relative flex items-center justify-center my-4">
                 <div className="border-t border-zinc-200 w-full" />
                 <span className="bg-white px-3 text-[11px] text-zinc-400 uppercase font-semibold absolute">
@@ -377,7 +325,6 @@ export default function Login() {
                 </span>
               </div>
 
-              {/* Botão de Login com Google */}
               <button
                 type="button"
                 onClick={handleGoogleLogin}
@@ -406,12 +353,11 @@ export default function Login() {
             </form>
           </div>
 
-          {/* Rodapé do formulário: Link para cotação e selo de segurança */}
           <div className="pt-6 mt-6 border-t border-zinc-100 text-center space-y-2">
             <p className="text-xs text-zinc-600">
-              Ainda não é cliente?{' '}
-              <Link to="/coberturas" className="text-red-600 font-bold hover:underline">
-                Simular seguro agora &gt;
+              Não tem uma conta?{' '}
+              <Link to="/cadastro" className="text-red-600 font-bold hover:underline">
+                Crie sua conta agora
               </Link>
             </p>
 
@@ -421,7 +367,6 @@ export default function Login() {
             </div>
           </div>
         </div>
-
       </div>
     </div>
   );

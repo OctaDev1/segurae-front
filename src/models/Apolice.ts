@@ -13,7 +13,7 @@ export default interface Apolice {
   tipoCobertura: string;
   dataInicio: string;
   dataTermino: string;
-  statusApolice: number; // Ex: 1 = Ativa, 2 = Vencida, 3 = Cancelada
+  statusApolice: number;
   usuario?: Usuario | null;
   cliente?: Cliente | null;
 }
