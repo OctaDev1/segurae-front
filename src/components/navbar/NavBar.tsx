@@ -8,7 +8,6 @@ const links = [
   { text: 'Coberturas', to: '/coberturas' },
   { text: 'Serviços', to: '/servicos' },
   { text: 'Contato', to: '/contato' },
-  { text: 'Apolices', to: '/apolices' },
 ];
 
 function Navbar() {
@@ -59,54 +58,77 @@ function Navbar() {
   }, [isMenuOpen]);
 
   // Fechar o submenu na mudança de rota
-  useEffect(() => {
+  const [prevPath, setPrevPath] = useState(location.pathname);
+  if (prevPath !== location.pathname) {
+    setPrevPath(location.pathname);
     setIsMenuOpen(false);
-  }, [location.pathname]);
+  }
 
   const toggleMenu = () => {
     setIsMenuOpen((prev) => !prev);
   };
 
-  // 1. Botão "Entrar" -> Direciona para a página de login
+  const isAutenticado = Boolean(usuario && usuario.token && usuario.token.trim() !== '');
+  const isCliente = isAutenticado && (usuario.perfil === 'ROLE_CLIENTE' || usuario.perfil === 'cliente');
+  const isCorretor = isAutenticado && (usuario.perfil === 'ROLE_CORRETOR' || usuario.perfil === 'corretor');
+
+  // 1. Opção "Entrar"
   const handleEntrar = () => {
     setIsMenuOpen(false);
-    navigate('/login');
-  };
-
-  // 2. Botão "Meu Painel" -> Direciona para o dashboard específico do perfil
-  const handleMeuPainel = () => {
-    setIsMenuOpen(false);
-    if (!usuario.token) {
-      ToastAlerta('Você precisa estar logado para acessar seu Painel.', 'erro');
+    if (!isAutenticado) {
       navigate('/login');
-      return;
-    }
-    const perfil = usuario.perfil || localStorage.getItem('perfil');
-    if (perfil === 'ROLE_CORRETOR') {
-      navigate('/dashboard/corretor');
+    } else if (isCorretor) {
+      ToastAlerta('Você já está autenticado como Corretor.', 'info');
+      navigate('/corretor');
     } else {
-      navigate('/dashboard/cliente');
+      ToastAlerta('Você já está autenticado como Cliente.', 'info');
+      navigate('/apolices');
     }
   };
 
-  // 3. Botão "Minhas Apólices" -> Verifica token e direciona para a listagem (/apolices)
-  const handleDashboard = () => {
+  // 2. Opção "Área do Cliente"
+  const handleAreaCliente = () => {
     setIsMenuOpen(false);
-    if (!usuario.token) {
-      // Não autenticado -> não permite acesso e exibe ToastAlert
-      ToastAlerta('Você precisa estar logado para acessar a Listagem.', 'erro');
-      return;
+    if (!isAutenticado) {
+      ToastAlerta('Faça login como Cliente para acessar a Área do Cliente.', 'info');
+      navigate('/login', { state: { tipoAcesso: 'cliente' } });
+    } else if (isCliente) {
+      navigate('/apolices');
+    } else {
+      ToastAlerta('Acesso negado: Seu perfil é de Corretor e não possui permissão para a Área do Cliente.', 'erro');
     }
-    // Autenticado -> navegação para a listagem de apólices
-    navigate('/apolices');
   };
 
-  // 4. Botão "Sair"
+  // 3. Opção "Área do Corretor"
+  const handleAreaCorretor = () => {
+    setIsMenuOpen(false);
+    if (!isAutenticado) {
+      ToastAlerta('Faça login como Corretor para acessar a Área do Corretor.', 'info');
+      navigate('/login', { state: { tipoAcesso: 'corretor' } });
+    } else if (isCorretor) {
+      navigate('/corretor');
+    } else {
+      ToastAlerta('Acesso negado: Seu perfil é de Cliente e não possui permissão para a Área do Corretor.', 'erro');
+    }
+  };
+
+  // 4. Opção "Sair"
   const handleSair = () => {
     setIsMenuOpen(false);
-    if (usuario.token) {
+    if (isAutenticado) {
       handleLogout();
-      navigate('/');
+    }
+    navigate('/');
+  };
+
+  // 5. Opção "Meu Painel" (Direciona de acordo com o perfil logado)
+  const handleMeuPainel = () => {
+    setIsMenuOpen(false);
+    const perfilAtual = usuario.perfil || localStorage.getItem('perfil');
+    if (perfilAtual === 'ROLE_CORRETOR' || perfilAtual === 'corretor') {
+      navigate('/corretor');
+    } else {
+      navigate('/apolices');
     }
   };
 
@@ -142,7 +164,7 @@ function Navbar() {
         ))}
       </ul>
 
-      {/* Dropdown "Área do Cliente" */}
+      {/* Dropdown "Sua conta" */}
       <div className="relative" ref={dropdownRef}>
         <button
           type="button"
@@ -151,7 +173,7 @@ function Navbar() {
           aria-haspopup="true"
           className="flex items-center gap-1.5 sm:gap-2 shrink-0 bg-red-600 hover:bg-red-700 text-white font-medium text-xs sm:text-sm px-3.5 sm:px-6 py-2 sm:py-2.5 rounded-full transition-all duration-200 shadow-md shadow-red-600/20 active:scale-[0.98] cursor-pointer focus:outline-none focus:ring-2 focus:ring-red-600/40 select-none"
         >
-          <span>Área do Cliente</span>
+          <span>Sua conta</span>
           <svg
             xmlns="http://www.w3.org/2000/svg"
             viewBox="0 0 20 20"
@@ -171,7 +193,7 @@ function Navbar() {
         {/* Submenu Dropdown */}
         {isMenuOpen && (
           <div
-            className="absolute right-0 top-full mt-3 w-56 sm:w-64 bg-white/95 backdrop-blur-md rounded-2xl shadow-xl shadow-zinc-900/10 border border-zinc-200/70 p-2 z-[110] animate-in fade-in zoom-in-95 duration-150 origin-top-right"
+            className="absolute right-0 top-full mt-3 w-56 sm:w-64 bg-white/95 backdrop-blur-md rounded-2xl shadow-xl shadow-zinc-900/10 border border-zinc-200/70 p-2 z-[110] animate-in fade-in zoom-in-95 duration-150 origin-top-right space-y-1"
             role="menu"
             aria-orientation="vertical"
           >
@@ -259,10 +281,10 @@ function Navbar() {
               </button>
             )}
 
-            {/* Opção 2: Dashboard (Vai para a Listagem em /apolices) */}
+            {/* Opção: Área do Cliente */}
             <button
               type="button"
-              onClick={handleDashboard}
+              onClick={handleAreaCliente}
               className="w-full flex items-center gap-3 px-3 py-2.5 text-xs sm:text-sm font-medium text-zinc-700 hover:text-zinc-900 hover:bg-zinc-100/80 rounded-xl transition-colors text-left cursor-pointer group"
               role="menuitem"
             >
@@ -283,17 +305,45 @@ function Navbar() {
                 </svg>
               </div>
               <div>
-                <span className="block font-semibold">Minhas Apólices</span>
+                <span className="block font-semibold">Área do Cliente</span>
                 <span className="block text-[11px] text-zinc-400 font-normal">
-                  Listagem de apólices
+                  Minhas apólices e coberturas
                 </span>
               </div>
             </button>
 
-            {/* Divisor */}
-            <div className="h-px bg-zinc-100 my-1" />
+            {/* Opção: Área do Corretor */}
+            <button
+              type="button"
+              onClick={handleAreaCorretor}
+              className="w-full flex items-center gap-3 px-3 py-2.5 text-xs sm:text-sm font-medium text-zinc-700 hover:text-zinc-900 hover:bg-zinc-100/80 rounded-xl transition-colors text-left cursor-pointer group"
+              role="menuitem"
+            >
+              <div className="w-8 h-8 rounded-lg bg-zinc-100 group-hover:bg-red-50 text-zinc-600 group-hover:text-red-600 flex items-center justify-center transition-colors shrink-0">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  strokeWidth={1.8}
+                  stroke="currentColor"
+                  className="w-4 h-4"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M20.25 14.15v4.25c0 1.094-.787 2.036-1.872 2.18-2.087.277-4.216.42-6.378.42s-4.291-.143-6.378-.42c-1.085-.144-1.872-1.086-1.872-2.18v-4.25m16.5 0a2.18 2.18 0 00.75-1.661V8.706c0-1.081-.768-2.015-1.837-2.175a48.114 48.114 0 00-3.413-.387m4.5 8.006c-.194.165-.42.295-.673.38A23.978 23.978 0 0112 15.75c-2.648 0-5.195-.429-7.577-1.22a2.016 2.016 0 01-.673-.38m0 0A2.18 2.18 0 013 12.489V8.706c0-1.081.768-2.015 1.837-2.175a48.111 48.111 0 013.413-.387m7.5 0V5.25A2.25 2.25 0 0013.5 3h-3a2.25 2.25 0 00-2.25 2.25v.894m7.5 0a48.667 48.667 0 00-7.5 0M12 12.75h.008v.008H12v-.008z"
+                  />
+                </svg>
+              </div>
+              <div>
+                <span className="block font-semibold">Área do Corretor</span>
+                <span className="block text-[11px] text-zinc-400 font-normal">
+                  Gestão de apólices
+                </span>
+              </div>
+            </button>
 
-            {/* Opção 3: Sair */}
+            {/* Opção: Sair */}
             <button
               type="button"
               onClick={handleSair}
@@ -319,7 +369,7 @@ function Navbar() {
               <div>
                 <span className="block font-semibold">Sair</span>
                 <span className="block text-[11px] text-zinc-400 font-normal">
-                  {usuario.token ? 'Encerrar sessão' : 'Fechar menu'}
+                  Encerrar sessão
                 </span>
               </div>
             </button>

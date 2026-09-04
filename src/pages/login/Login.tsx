@@ -1,6 +1,5 @@
 import { useState, useContext, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { AuthContext } from '../../contexts/AuthContext';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { ToastAlerta } from '../../utils/toastalerta/ToastAlerta';
 import {
   Car,
@@ -16,9 +15,11 @@ import {
   ArrowLeft,
   Key,
 } from '@phosphor-icons/react';
+import { AuthContext } from '../../contexts/AuthContext';
 
 export default function Login() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { handleLogin: authLogin, isLoading: authLoading } = useContext(AuthContext);
 
   // ==========================================
@@ -26,7 +27,10 @@ export default function Login() {
   // ==========================================
 
   // 1. Tipo de login ativo: 'cliente' (segurado) ou 'corretor'
-  const [tipoAcesso, setTipoAcesso] = useState<'cliente' | 'corretor'>('cliente');
+  const stateTipo = (location.state as { tipoAcesso?: 'cliente' | 'corretor' } | null)?.tipoAcesso;
+  const [tipoAcessoManual, setTipoAcessoManual] = useState<'cliente' | 'corretor' | null>(null);
+  const tipoAcesso = tipoAcessoManual ?? stateTipo ?? 'cliente';
+  const setTipoAcesso = (tipo: 'cliente' | 'corretor') => setTipoAcessoManual(tipo);
 
   // 2. Campo de identificação (E-mail ou Usuário)
   const [identificador, setIdentificador] = useState('');
