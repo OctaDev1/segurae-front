@@ -14,6 +14,7 @@ import {
   ArrowLeft,
   Key,
 } from '@phosphor-icons/react';
+import { ToastAlerta } from '../../utils/toastalerta/ToastAlerta';
 
 export default function Login() {
   const navigate = useNavigate();
@@ -68,16 +69,16 @@ export default function Login() {
     setErro('');
     setCarregando(true);
 
-    // Simulação de login
     setTimeout(() => {
       setCarregando(false);
-      alert(
-        `Login realizado com sucesso como ${
-          tipoAcesso === 'cliente' ? 'Cliente / Segurado' : 'Corretor Parceiro'
-        }!`
-      );
-      navigate('/');
-    }, 1000);
+      if (tipoAcesso === 'corretor') {
+        ToastAlerta('Acesso concedido: Bem-vindo ao Painel do Corretor!', 'sucesso');
+        navigate('/corretor');
+      } else {
+        ToastAlerta('Acesso concedido: Bem-vindo à Área do Segurado!', 'sucesso');
+        navigate('/apolices');
+      }
+    }, 800);
   };
 
   // Função para simular o login com o Google

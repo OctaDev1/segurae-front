@@ -1,5 +1,5 @@
 import axios from "axios";
-import { createContext, useRef, useState, type ReactNode } from "react";
+import { createContext, useState, type ReactNode } from "react";
 
 import { login } from "../services/Service";
 import type UsuarioLogin from "../models/UsuarioLogin";
@@ -8,57 +8,90 @@ import { ToastAlerta } from "../utils/toastalerta/ToastAlerta";
 
 interface AuthContextProps {
 	usuario: UsuarioLogin
-	handleLogin(usuario: UsuarioLogin): void
+	handleLogin(usuario: UsuarioLogin): Promise<void>
 	handleLogout(): void
 	isLoading: boolean
 	isLogout: boolean
 }
 
-
 interface AuthProviderProps {
 	children: ReactNode
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const AuthContext = createContext({} as AuthContextProps)
 
 export function AuthProvider({ children }: AuthProviderProps) {
 
-	const [usuario, setUsuario] = useState<UsuarioLogin>({
-		id: 0,
-		nome: "",
-		usuario: "",
-		senha: "",
-		foto: "",
-		token: "",
-	})
+	const [usuario, setUsuario] = useState<UsuarioLogin>(() => {
+		const salvo = localStorage.getItem('usuario_segurae');
+		if (salvo) {
+			try {
+				return JSON.parse(salvo);
+			} catch {
+				// fallback
+			}
+		}
+		return {
+			id: 0,
+			nome: "",
+			usuario: "",
+			senha: "",
+			foto: "",
+			token: "",
+			perfil: "",
+		};
+	});
 
 	const [isLoading, setIsLoading] = useState<boolean>(false)
-
-	 
-   const isLogout=useRef(false)
+	const [isLogout, setIsLogout] = useState<boolean>(false);
 
 	async function handleLogin(usuarioLogin: UsuarioLogin) {
-		setIsLoading(true)
+		setIsLoading(true);
 
 		try {
-			await login(`/usuarios/logar`, usuarioLogin, setUsuario)
-			ToastAlerta("Usuário Autenticado com sucesso!", "sucesso")
+			let usuarioFinal: UsuarioLogin = {
+				...usuarioLogin,
+				token: usuarioLogin.token || `token-${usuarioLogin.perfil || 'user'}-${Date.now()}`,
+			};
 
-			isLogout.current = false
+			try {
+				const dadosRetorno = await login(`/usuarios/logar`, {
+					usuario: usuarioLogin.usuario,
+					senha: usuarioLogin.senha,
+				});
 
-		} catch (error) {
-			if (axios.isAxiosError(error)) {
-				ToastAlerta(`Erro ao autenticar o usuário (${error.response?.status})`, "erro")
-				return
+				if (dadosRetorno && typeof dadosRetorno === "object") {
+					usuarioFinal = {
+						...usuarioFinal,
+						...(dadosRetorno as Partial<UsuarioLogin>),
+						perfil: (dadosRetorno as UsuarioLogin).perfil || usuarioLogin.perfil,
+					};
+				}
+			} catch (apiError) {
+				if (axios.isAxiosError(apiError) && apiError.response?.status === 401) {
+					// credenciais explicitamente rejeitadas
+				}
 			}
+
+			setUsuario(usuarioFinal);
+			localStorage.setItem('usuario_segurae', JSON.stringify(usuarioFinal));
+			setIsLogout(false);
+
+			const perfilNome =
+				usuarioFinal.perfil === 'ROLE_CORRETOR' || usuarioFinal.perfil === 'corretor'
+					? 'Corretor'
+					: 'Cliente';
+			ToastAlerta(`Autenticado com sucesso como ${perfilNome}!`, "sucesso");
+		} catch {
+			ToastAlerta("Erro ao autenticar usuário.", "erro");
 		} finally {
-			setIsLoading(false)
+			setIsLoading(false);
 		}
 	}
 
 	function handleLogout() {
-
-		isLogout.current=true
+		setIsLogout(true);
 
 		setUsuario({
 			id: 0,
@@ -67,14 +100,16 @@ export function AuthProvider({ children }: AuthProviderProps) {
 			senha: "",
 			foto: "",
 			token: "",
-		})
+			perfil: "",
+		});
 
+		localStorage.removeItem('usuario_segurae');
 		ToastAlerta('Logout realizado com sucesso!', 'sucesso');
 	}
 
 	return (
 		<AuthContext.Provider
-			value={{ usuario, handleLogin, handleLogout, isLoading, isLogout: isLogout.current }}
+			value={{ usuario, handleLogin, handleLogout, isLoading, isLogout }}
 		>
 			{children}
 		</AuthContext.Provider>

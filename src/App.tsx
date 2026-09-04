@@ -10,6 +10,7 @@ import Servicos from './pages/servicos/Servicos';
 import Login from './pages/login/Login';
 import Cadastro from './pages/cadastro/Cadastro';
 import ListagemApolices from './pages/apolices/ListagemApolices';
+import AreaCorretor from './pages/corretor/AreaCorretor';
 
 function App() {
   return (
@@ -41,6 +42,8 @@ function App() {
           <Route path="/login" element={<Login />} />
           <Route path="/cadastro" element={<Cadastro />} />
           <Route path="/apolices" element={<ListagemApolices />} />
+          <Route path="/corretor" element={<AreaCorretor />} />
+          <Route path="/corretor/apolices" element={<AreaCorretor />} />
         </Routes>
       </BrowserRouter>
     </AuthProvider>
