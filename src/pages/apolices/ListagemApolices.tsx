@@ -1,4 +1,4 @@
-import { useContext, useEffect, useState } from 'react';
+import { useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   Car,
@@ -14,91 +14,13 @@ import {
   CheckCircle,
   WarningCircle,
   ArrowSquareOut,
+  ArrowCounterClockwise,
 } from '@phosphor-icons/react';
 import { AuthContext } from '../../contexts/AuthContext';
 import type Apolice from '../../models/Apolice';
+import { buscar, getAuthHeaders } from '../../services/Service';
 import { ToastAlerta } from '../../utils/toastalerta/ToastAlerta';
-
-const APOLICES_INICIAIS: Apolice[] = [
-  {
-    id: 1,
-    numeroApolice: 'SEG-2026-X892A1',
-    marcaModelo: 'Toyota Corolla Cross XRE 2.0',
-    bemSegurado: 'Automóvel Passeio',
-    anoModelo: 2024,
-    placa: 'BRA2E19',
-    renavam: '00123456789',
-    valorApolice: 3850.0,
-    tipoCobertura: 'Total 100% FIPE + Terceiros (R$ 150k)',
-    dataInicio: '2026-01-15',
-    dataTermino: '2027-01-15',
-    statusApolice: 1,
-    cliente: {
-      id: 1,
-      nomeCompleto: 'Carlos Eduardo Mendes',
-      email: 'carlos.mendes@email.com',
-      cpfCnpj: '123.456.789-00',
-      dataNascimento: '1988-04-12',
-    },
-    usuario: {
-      id: 1,
-      nome: 'Mariana Silva (Corretora)',
-      email: 'mariana.corretora@segurae.com.br',
-    },
-  },
-  {
-    id: 2,
-    numeroApolice: 'SEG-2025-F741B3',
-    marcaModelo: 'Honda Civic Touring 1.5 Turbo',
-    bemSegurado: 'Automóvel Passeio',
-    anoModelo: 2022,
-    placa: 'SEG9A88',
-    renavam: '00987654321',
-    valorApolice: 4200.0,
-    tipoCobertura: 'Compreensiva + Vidros, Faróis e Carro Reserva',
-    dataInicio: '2025-08-10',
-    dataTermino: '2026-08-10',
-    statusApolice: 1,
-    cliente: {
-      id: 1,
-      nomeCompleto: 'Carlos Eduardo Mendes',
-      email: 'carlos.mendes@email.com',
-      cpfCnpj: '123.456.789-00',
-      dataNascimento: '1988-04-12',
-    },
-    usuario: {
-      id: 2,
-      nome: 'Roberto Dias (Corretor)',
-      email: 'roberto.corretor@segurae.com.br',
-    },
-  },
-  {
-    id: 3,
-    numeroApolice: 'SEG-2024-C332D9',
-    marcaModelo: 'Jeep Renegade Longitude 1.3 Turbo',
-    bemSegurado: 'Automóvel Passeio',
-    anoModelo: 2021,
-    placa: 'RLM4C20',
-    renavam: '00543219876',
-    valorApolice: 3100.0,
-    tipoCobertura: 'Roubo, Furto e Incêndio',
-    dataInicio: '2024-02-01',
-    dataTermino: '2025-02-01',
-    statusApolice: 2,
-    cliente: {
-      id: 1,
-      nomeCompleto: 'Carlos Eduardo Mendes',
-      email: 'carlos.mendes@email.com',
-      cpfCnpj: '123.456.789-00',
-      dataNascimento: '1988-04-12',
-    },
-    usuario: {
-      id: 1,
-      nome: 'Mariana Silva (Corretora)',
-      email: 'mariana.corretora@segurae.com.br',
-    },
-  },
-];
+import { APOLICES_INICIAIS_SISTEMA } from '../../utils/corretorUtils';
 
 export default function ListagemApolices() {
   const navigate = useNavigate();
@@ -114,17 +36,83 @@ export default function ListagemApolices() {
       navigate('/login', { state: { tipoAcesso: 'cliente' }, replace: true });
     } else if (!isCliente) {
       ToastAlerta('Acesso negado: Seu perfil é de Corretor e não possui permissão para a Área do Cliente.', 'erro');
-      navigate('/corretor', { replace: true });
+      navigate('/dashboard/corretor', { replace: true });
     }
   }, [isAutenticado, isCliente, navigate]);
 
-  const [apolices] = useState<Apolice[]>(APOLICES_INICIAIS);
+  const [todasApolices, setTodasApolices] = useState<Apolice[]>(() => {
+    const sistema = APOLICES_INICIAIS_SISTEMA;
+    const salvasCompartilhadas = localStorage.getItem('segurae_apolices_compartilhadas');
+    const salvasCorretor = localStorage.getItem('segurae_apolices_corretor');
+    const salvas = salvasCompartilhadas || salvasCorretor;
+    if (salvas) {
+      try {
+        const parsed = JSON.parse(salvas);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          // Merge: sistema primeiro (base), locais sobrescrevem se mesmo id
+          const map = new Map<string | number, Apolice>();
+          sistema.forEach((a) => { const k = a.id ?? a.numeroApolice; if (k !== undefined && k !== '') map.set(k, a); });
+          parsed.forEach((a) => { const k = a.id ?? a.numeroApolice; if (k !== undefined && k !== '') map.set(k, a); });
+          return Array.from(map.values());
+        }
+      } catch { /* fallback */ }
+    }
+    return sistema;
+  });
+
+  const [carregando, setCarregando] = useState(false);
   const [busca, setBusca] = useState('');
   const [filtroStatus, setFiltroStatus] = useState<'todas' | 'ativas' | 'vencidas'>('todas');
   const [apoliceSelecionada, setApoliceSelecionada] = useState<Apolice | null>(null);
 
+  // Carregar apólices atualizadas da API
+  const carregarApolicesApi = useCallback(async () => {
+    const tokenAtual = usuario?.token || '';
+    // Token fake (local) — pula chamada ao Render, usa dados locais/sistema
+    if (tokenAtual.startsWith('segurae-token')) return;
+
+    setCarregando(true);
+    try {
+      const header = getAuthHeaders(tokenAtual);
+      const dados = await buscar<Apolice[]>('/apolices', undefined, header);
+      if (Array.isArray(dados) && dados.length > 0) {
+        const salvasLocaisRaw =
+          localStorage.getItem('segurae_apolices_compartilhadas') ||
+          localStorage.getItem('segurae_apolices_corretor');
+        let locais: Apolice[] = [];
+        if (salvasLocaisRaw) {
+          try {
+            locais = JSON.parse(salvasLocaisRaw);
+          } catch {
+            locais = [];
+          }
+        }
+        const map = new Map<string | number, Apolice>();
+        dados.forEach((a) => {
+          const k = a.id ?? a.numeroApolice;
+          if (k !== undefined && k !== '') map.set(k, a);
+        });
+        locais.forEach((a) => {
+          const k = a.id ?? a.numeroApolice;
+          if (k !== undefined && k !== '') map.set(k, a);
+        });
+        const uniao = Array.from(map.values());
+        setTodasApolices(uniao);
+        localStorage.setItem('segurae_apolices_compartilhadas', JSON.stringify(uniao));
+      }
+    } catch {
+      // Offline fallback: continua com dados do storage/iniciais
+    } finally {
+      setCarregando(false);
+    }
+  }, [usuario]);
+
+  useEffect(() => {
+    carregarApolicesApi();
+  }, [carregarApolicesApi]);
+
   const formatarMoeda = (valor: number) => {
-    return valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    return Number(valor || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
   };
 
   const formatarData = (dataStr: string) => {
@@ -136,27 +124,76 @@ export default function ListagemApolices() {
     return dataStr;
   };
 
-  const apolicesFiltradas = apolices.filter((apolice) => {
-    const termo = busca.toLowerCase();
-    const bateBusca =
-      apolice.marcaModelo.toLowerCase().includes(termo) ||
-      apolice.placa.toLowerCase().includes(termo) ||
-      (apolice.numeroApolice && apolice.numeroApolice.toLowerCase().includes(termo));
+  // Filtrar apólices correspondentes ao cliente logado
+  const apolicesDoCliente = useMemo(() => {
+    const emailUsuario = (usuario.usuario || usuario.email || '').toLowerCase().trim();
+    const nomeUsuario = (usuario.nome || '').toLowerCase().trim();
+    const idUsuario = usuario.id ? Number(usuario.id) : null;
 
-    if (filtroStatus === 'ativas') {
-      return bateBusca && apolice.statusApolice === 1;
-    }
-    if (filtroStatus === 'vencidas') {
-      return bateBusca && apolice.statusApolice === 2;
-    }
-    return bateBusca;
-  });
+    // 1. Apólices que batem com o email, nome ou id do cliente
+    const vinculadas = todasApolices.filter((apolice) => {
+      const emailCli = apolice.cliente?.email?.toLowerCase().trim();
+      const nomeCli = apolice.cliente?.nomeCompleto?.toLowerCase().trim();
+      const idCli = apolice.cliente?.id ? Number(apolice.cliente.id) : null;
 
-  const totalAtivas = apolices.filter((a) => a.statusApolice === 1).length;
+      // Match exato por email (mais confiável)
+      if (emailUsuario && emailCli && emailCli === emailUsuario) return true;
+
+      // Match por ID do cliente na apólice
+      if (idUsuario && idCli && idCli === idUsuario) return true;
+
+      // Match por nome completo exato
+      if (nomeUsuario && nomeCli && nomeCli === nomeUsuario) return true;
+
+      return false;
+    });
+
+    if (vinculadas.length > 0) {
+      return vinculadas;
+    }
+
+    // Fallback para Carlos se o email/nome referir a ele
+    if (emailUsuario.includes('carlos') || nomeUsuario.startsWith('carlos')) {
+      const carlosApolices = todasApolices.filter(
+        (a) =>
+          a.cliente?.email?.toLowerCase() === 'carlos.mendes@email.com' ||
+          a.cliente?.nomeCompleto?.toLowerCase() === 'carlos eduardo mendes'
+      );
+      if (carlosApolices.length > 0) return carlosApolices;
+    }
+
+    return [];
+  }, [todasApolices, usuario]);
+
+  const apolicesFiltradas = useMemo(() => {
+    return apolicesDoCliente.filter((apolice) => {
+      const termo = busca.toLowerCase().trim();
+      const bateBusca =
+        !termo ||
+        apolice.marcaModelo?.toLowerCase().includes(termo) ||
+        apolice.placa?.toLowerCase().includes(termo) ||
+        (apolice.numeroApolice && apolice.numeroApolice.toLowerCase().includes(termo));
+
+      if (!bateBusca) return false;
+
+      if (filtroStatus === 'ativas') {
+        return apolice.statusApolice === 1;
+      }
+      if (filtroStatus === 'vencidas') {
+        return apolice.statusApolice === 2;
+      }
+      return true;
+    });
+  }, [apolicesDoCliente, busca, filtroStatus]);
+
+  const totalAtivas = useMemo(() => {
+    return apolicesDoCliente.filter((a) => a.statusApolice === 1).length;
+  }, [apolicesDoCliente]);
 
   if (!isAutenticado || !isCliente) {
     return null;
   }
+
 
   return (
     <div className="min-h-screen bg-zinc-50 text-zinc-900">
@@ -218,14 +255,27 @@ export default function ListagemApolices() {
             </p>
           </div>
 
-          <div className="relative z-10 shrink-0">
+          <div className="relative z-10 flex flex-wrap items-center gap-3 shrink-0">
+            <button
+              onClick={carregarApolicesApi}
+              disabled={carregando}
+              className="px-4 py-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-bold rounded-2xl flex items-center justify-center gap-2 border border-zinc-700 transition-all cursor-pointer disabled:opacity-50"
+            >
+              <ArrowCounterClockwise
+                size={18}
+                weight="bold"
+                className={carregando ? 'animate-spin text-red-400' : ''}
+              />
+              <span>{carregando ? 'Atualizando...' : 'Atualizar'}</span>
+            </button>
+
             <button
               onClick={() =>
                 alert(
                   '🚨 Central de Guincho e Emergência acionada!\n\nUm atendente entrará em contato ou você pode ligar diretamente para 0800 700 8020.'
                 )
               }
-              className="w-full sm:w-auto px-5 py-3.5 bg-red-600 hover:bg-red-700 text-white font-bold rounded-2xl text-sm flex items-center justify-center gap-2.5 shadow-lg shadow-red-600/40 transition-all cursor-pointer"
+              className="px-5 py-3.5 bg-red-600 hover:bg-red-700 text-white font-bold rounded-2xl text-xs sm:text-sm flex items-center justify-center gap-2.5 shadow-lg shadow-red-600/40 transition-all cursor-pointer"
             >
               <Lightning size={20} weight="fill" />
               <span>Acionar Guincho 24h</span>
@@ -242,7 +292,7 @@ export default function ListagemApolices() {
             </div>
             <div>
               <p className="text-xs text-zinc-500 font-medium">Veículos Segurados</p>
-              <p className="text-2xl font-black text-zinc-900">{apolices.length}</p>
+              <p className="text-2xl font-black text-zinc-900">{apolicesDoCliente.length}</p>
             </div>
           </div>
 
@@ -290,7 +340,7 @@ export default function ListagemApolices() {
                   : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'
               }`}
             >
-              Todas ({apolices.length})
+              Todas ({apolicesDoCliente.length})
             </button>
 
             <button
@@ -312,12 +362,39 @@ export default function ListagemApolices() {
                   : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'
               }`}
             >
-              Vencidas ({apolices.length - totalAtivas})
+              Vencidas ({apolicesDoCliente.length - totalAtivas})
             </button>
           </div>
         </div>
 
-        {apolicesFiltradas.length === 0 ? (
+        {carregando ? (
+          <div className="bg-white rounded-3xl border border-zinc-200 p-12 text-center my-6 flex flex-col items-center justify-center">
+            <div className="w-10 h-10 border-4 border-red-600 border-t-transparent rounded-full animate-spin mb-4" />
+            <p className="text-zinc-600 font-semibold text-sm">Carregando suas apólices...</p>
+          </div>
+        ) : apolicesDoCliente.length === 0 ? (
+          <div className="bg-white rounded-3xl border border-dashed border-zinc-300 p-12 text-center my-6">
+            <Car size={48} className="mx-auto text-zinc-300 mb-3" />
+            <h3 className="text-lg font-bold text-zinc-800 mb-1">Nenhuma apólice vinculada à sua conta</h3>
+            <p className="text-sm text-zinc-500 mb-6 max-w-md mx-auto">
+              Assim que seu corretor parceiro emitir uma apólice informando seu e-mail ({usuario.usuario || usuario.email || 'cadastrado'}), ela aparecerá automaticamente aqui.
+            </p>
+            <div className="flex items-center justify-center gap-3">
+              <button
+                onClick={carregarApolicesApi}
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-xl transition-colors cursor-pointer"
+              >
+                Verificar Novas Apólices
+              </button>
+              <Link
+                to="/contato"
+                className="px-4 py-2 bg-zinc-100 hover:bg-zinc-200 text-zinc-800 text-xs font-bold rounded-xl transition-colors"
+              >
+                Falar com um Corretor
+              </Link>
+            </div>
+          </div>
+        ) : apolicesFiltradas.length === 0 ? (
           <div className="bg-white rounded-3xl border border-dashed border-zinc-300 p-12 text-center my-6">
             <Car size={48} className="mx-auto text-zinc-300 mb-3" />
             <h3 className="text-lg font-bold text-zinc-800 mb-1">Nenhuma apólice encontrada</h3>
@@ -335,6 +412,7 @@ export default function ListagemApolices() {
             </button>
           </div>
         ) : (
+
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {apolicesFiltradas.map((apolice) => {
               const isAtiva = apolice.statusApolice === 1;

@@ -1,10 +1,11 @@
+/* eslint-disable react-refresh/only-export-components */
 import axios from "axios";
-import { createContext, useRef, useState, type ReactNode } from "react";
+import { createContext, useState, type ReactNode } from "react";
 
-import { login } from "../services/Service";
+import { api, login } from "../services/Service";
 import type UsuarioLogin from "../models/UsuarioLogin";
 import { ToastAlerta } from "../utils/toastalerta/ToastAlerta";
-
+import { autenticarUsuarioLocal } from "../utils/authUtils";
 
 interface AuthContextProps {
 	usuario: UsuarioLogin;
@@ -46,15 +47,22 @@ export function AuthProvider({ children }: AuthProviderProps) {
 	});
 
 	const [isLoading, setIsLoading] = useState<boolean>(false);
-	const isLogout = useRef(false);
+	const [isLogout, setIsLogout] = useState<boolean>(false);
 
 	async function handleLogin(usuarioLogin: UsuarioLogin): Promise<UsuarioLogin | null> {
 		setIsLoading(true);
 
-		try {
-			const data: UsuarioLogin = await login(`/usuarios/logar`, usuarioLogin, setUsuario);
+		const identificador = (usuarioLogin.usuario || '').trim();
+		const senha = (usuarioLogin.senha || '').trim();
+		const perfilSolicitado =
+			usuarioLogin.perfil === 'ROLE_CORRETOR' ? 'ROLE_CORRETOR' : 'ROLE_CLIENTE';
 
-			if (data && data.token) {
+		try {
+			// 1. Tenta autenticação local / fake consumo prioritária (instantânea e determinística)
+			const resultadoLocal = autenticarUsuarioLocal(identificador, senha, perfilSolicitado);
+
+			if (resultadoLocal.sucesso && resultadoLocal.usuario) {
+				const data = resultadoLocal.usuario;
 				localStorage.setItem("token", data.token);
 				localStorage.setItem("perfil", data.perfil || "");
 				localStorage.setItem("nome", data.nome || "");
@@ -63,22 +71,60 @@ export function AuthProvider({ children }: AuthProviderProps) {
 				localStorage.setItem("foto", data.foto || "");
 
 				setUsuario(data);
-				isLogout.current = false;
-				ToastAlerta("Usuário Autenticado com sucesso!", "sucesso");
+				setIsLogout(false);
+				ToastAlerta(`Bem-vindo, ${data.nome}!`, "sucesso");
+
+				// Sincronização em segundo plano não-bloqueante com o backend (fire-and-forget)
+				(async () => {
+					try {
+						await login(`/usuarios/logar`, usuarioLogin);
+					} catch {
+						// Ignora erro do backend offline
+					}
+				})();
+
 				return data;
 			}
-			return null;
-		} catch (error) {
-			if (axios.isAxiosError(error)) {
-				const status = error.response?.status;
-				if (status === 401) {
-					ToastAlerta("Credenciais inválidas! Verifique usuário e senha.", "erro");
-				} else {
-					ToastAlerta(`Erro ao autenticar o usuário (${status || "rede"})`, "erro");
-				}
-			} else {
-				ToastAlerta("Erro inesperado ao realizar login.", "erro");
+
+			// Se o usuário existe mas a senha está incorreta
+			if (resultadoLocal.erro === 'SENHA_INCORRETA') {
+				ToastAlerta(resultadoLocal.mensagem, "erro");
+				return null;
 			}
+
+			// 2. Se não encontrou nas contas locais, tenta bater na API do Render com timeout controlado (5s)
+			try {
+				const controller = new AbortController();
+				const timeoutId = setTimeout(() => controller.abort(), 5000);
+
+				const resposta = await api.post('/usuarios/logar', usuarioLogin, {
+					signal: controller.signal,
+				});
+				clearTimeout(timeoutId);
+
+				const data: UsuarioLogin = resposta.data;
+				if (data && data.token) {
+					localStorage.setItem("token", data.token);
+					localStorage.setItem("perfil", data.perfil || "");
+					localStorage.setItem("nome", data.nome || "");
+					localStorage.setItem("usuario", data.usuario || "");
+					localStorage.setItem("id", String(data.id || "0"));
+					localStorage.setItem("foto", data.foto || "");
+
+					setUsuario(data);
+					setIsLogout(false);
+					ToastAlerta("Usuário Autenticado com sucesso!", "sucesso");
+					return data;
+				}
+			} catch (apiError) {
+				if (axios.isAxiosError(apiError) && apiError.response?.status === 401) {
+					ToastAlerta("Credenciais inválidas! Verifique usuário e senha.", "erro");
+					return null;
+				}
+			}
+
+			// 3. Se não foi possível encontrar a conta
+			ToastAlerta(resultadoLocal.mensagem, "erro");
 			return null;
 		} finally {
 			setIsLoading(false);
@@ -86,7 +132,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 	}
 
 	function handleLogout() {
-		isLogout.current = true;
+		setIsLogout(true);
 
 		localStorage.removeItem("token");
 		localStorage.removeItem("perfil");
@@ -110,7 +156,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
 	return (
 		<AuthContext.Provider
-			value={{ usuario, handleLogin, handleLogout, isLoading, isLogout: isLogout.current }}
+			value={{ usuario, handleLogin, handleLogout, isLoading, isLogout }}
 		>
 			{children}
 		</AuthContext.Provider>

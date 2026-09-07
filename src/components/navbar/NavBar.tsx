@@ -93,7 +93,7 @@ function Navbar() {
       ToastAlerta('Faça login como Cliente para acessar a Área do Cliente.', 'info');
       navigate('/login', { state: { tipoAcesso: 'cliente' } });
     } else if (isCliente) {
-      navigate('/apolices');
+      navigate('/dashboard/cliente');
     } else {
       ToastAlerta('Acesso negado: Seu perfil é de Corretor e não possui permissão para a Área do Cliente.', 'erro');
     }

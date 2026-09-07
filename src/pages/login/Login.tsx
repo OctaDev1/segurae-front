@@ -50,18 +50,19 @@ export default function Login() {
   // 7. Mensagem de erro para validações simples
   const [erro, setErro] = useState('');
 
-  // Se já estiver logado, redireciona para o painel correspondente
+  // Se já estiver logado, redireciona para o painel correspondente (a menos que venha solicitando troca de conta)
   useEffect(() => {
     const token = localStorage.getItem('token');
     const perfil = localStorage.getItem('perfil');
-    if (token) {
+    const stateTrocar = (location.state as { trocarConta?: boolean } | null)?.trocarConta;
+    if (token && !stateTrocar) {
       if (perfil === 'ROLE_CORRETOR') {
         navigate('/dashboard/corretor');
       } else {
         navigate('/dashboard/cliente');
       }
     }
-  }, [navigate]);
+  }, [navigate, location.state]);
 
   // ==========================================
   // FUNÇÕES DE SUBMISSÃO COM VALIDAÇÃO CRUZADA
@@ -90,14 +91,14 @@ export default function Login() {
 
     try {
       const response = await authLogin({
-        id: null,
+        id: 0,
         nome: '',
         usuario: identificador.trim(),
         senha: senha,
         foto: '',
         token: '',
-        perfil: tipoAcesso === 'cliente' ? 'ROLE_CLIENTE' : 'ROLE_CORRETOR'
-      } as any);
+        perfil: tipoAcesso === 'cliente' ? 'ROLE_CLIENTE' : 'ROLE_CORRETOR',
+      });
 
       if (!response || !response.token) {
         setErro('Credenciais inválidas. Verifique seu usuário e senha.');
@@ -152,13 +153,14 @@ export default function Login() {
 
       {/* Barra superior de navegação para voltar à Home */}
       <div className="w-full max-w-5xl mb-4 flex items-center justify-between text-zinc-600 text-sm">
-        <Link
-          to="/"
-          className="inline-flex items-center gap-2 hover:text-red-600 transition-colors duration-200 font-medium"
+        <button
+          type="button"
+          onClick={() => navigate(-1)}
+          className="inline-flex items-center gap-2 hover:text-red-600 transition-colors duration-200 font-medium cursor-pointer"
         >
           <ArrowLeft size={18} weight="bold" />
-          <span>Voltar ao site</span>
-        </Link>
+          <span>Voltar</span>
+        </button>
         <span className="text-xs text-zinc-400 font-medium">
           Seguraê • Portal de Acesso
         </span>
@@ -462,7 +464,9 @@ export default function Login() {
                 </svg>
                 <span>Continuar com Google</span>
               </button>
+
             </form>
+
           </div>
 
           {/* Rodapé do formulário: Link para cotação e selo de segurança */}

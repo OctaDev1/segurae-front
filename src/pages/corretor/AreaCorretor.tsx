@@ -1,5 +1,5 @@
 import { useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ShieldCheck,
   Car,
@@ -21,14 +21,32 @@ import {
   SquaresFour,
   ArrowLeft,
   Check,
+  LockKey,
+  Users,
+  UserMinus,
 } from '@phosphor-icons/react';
 import { AuthContext } from '../../contexts/AuthContext';
 import type Apolice from '../../models/Apolice';
-import { buscar, cadastrar, atualizar, deletar } from '../../services/Service';
+import type Cliente from '../../models/Cliente';
+import type Usuario from '../../models/Usuario';
+import { buscar, cadastrar, atualizar, deletar, getAuthHeaders, cadastrarUsuario } from '../../services/Service';
 import { ToastAlerta } from '../../utils/toastalerta/ToastAlerta';
+import {
+  type ClienteExcluido,
+  getClientesExcluidos,
+  isClienteExcluido,
+  OPCOES_COBERTURA,
+  gerarSenhaInicial,
+  CLIENTES_INICIAIS_SISTEMA,
+  getClientesCorretor,
+  salvarClientesCorretor,
+  formatarDataBR,
+  calcularIdade,
+  converterDataBrParaIso,
+  converterDataIsoParaBr,
+} from '../../utils/corretorUtils';
 
-const getAuthHeader = (token?: string) =>
-  token ? { headers: { Authorization: `Bearer ${token}` } } : {};
+const getAuthHeader = (token?: string) => getAuthHeaders(token);
 
 // Dados iniciais para demonstração e resiliência offline/cold-start
 const APOLICES_INICIAIS_CORRETOR: Apolice[] = [
@@ -152,10 +170,12 @@ interface FormApoliceData {
   dataInicio: string;
   dataTermino: string;
   statusApolice: number;
+  clienteId?: number | null;
   clienteNome: string;
   clienteEmail: string;
   clienteCpfCnpj: string;
   clienteDataNasc: string;
+  clienteSenha?: string;
 }
 
 const FORM_INICIAL: FormApoliceData = {
@@ -165,17 +185,19 @@ const FORM_INICIAL: FormApoliceData = {
   anoModelo: new Date().getFullYear(),
   placa: '',
   renavam: '',
-  valorApolice: '',
-  tipoCobertura: 'Total 100% FIPE + Terceiros (R$ 150k)',
+  valorApolice: '2950.00',
+  tipoCobertura: 'Completo (Colisão e Terceiros)',
   dataInicio: new Date().toISOString().split('T')[0],
   dataTermino: new Date(new Date().setFullYear(new Date().getFullYear() + 1))
     .toISOString()
     .split('T')[0],
   statusApolice: 1,
+  clienteId: null,
   clienteNome: '',
   clienteEmail: '',
   clienteCpfCnpj: '',
-  clienteDataNasc: '1990-01-01',
+  clienteDataNasc: '01/01/1990',
+  clienteSenha: '',
 };
 
 export default function AreaCorretor() {
@@ -198,6 +220,14 @@ export default function AreaCorretor() {
 
   // Estados principais
   const [apolices, setApolices] = useState<Apolice[]>(() => {
+    const salvasCompartilhadas = localStorage.getItem('segurae_apolices_compartilhadas');
+    if (salvasCompartilhadas) {
+      try {
+        return JSON.parse(salvasCompartilhadas);
+      } catch {
+        // fallback
+      }
+    }
     const salvas = localStorage.getItem('segurae_apolices_corretor');
     if (salvas) {
       try {
@@ -209,6 +239,11 @@ export default function AreaCorretor() {
     return APOLICES_INICIAIS_CORRETOR;
   });
 
+  const [clientesDisponiveis, setClientesDisponiveis] = useState<Cliente[]>(() => {
+    return getClientesCorretor();
+  });
+  const [clientesCadastradosNaApi, setClientesCadastradosNaApi] = useState<Cliente[]>([]);
+  const [abaCliente, setAbaCliente] = useState<'existente' | 'novo'>('existente');
   const [carregando, setCarregando] = useState(false);
   const [salvando, setSalvando] = useState(false);
   const [statusApi, setStatusApi] = useState<'online' | 'offline' | 'verificando'>('verificando');
@@ -217,6 +252,19 @@ export default function AreaCorretor() {
   const [busca, setBusca] = useState('');
   const [filtroStatus, setFiltroStatus] = useState<'todas' | 'ativas' | 'vencidas' | 'pendentes'>('todas');
   const [viewMode, setViewMode] = useState<'tabela' | 'cards'>('tabela');
+
+  // Navegação por abas principais: Apólices vs Clientes
+  const [searchParams, setSearchParams] = useSearchParams();
+  const abaPrincipal = searchParams.get('aba') === 'clientes' ? 'clientes' : 'apolices';
+  const setAbaPrincipal = (aba: 'apolices' | 'clientes') => {
+    setSearchParams(aba === 'clientes' ? { aba: 'clientes' } : {});
+  };
+
+  // Gestão e exclusão de clientes
+  const [buscaClientes, setBuscaClientes] = useState('');
+  const [clienteParaExcluir, setClienteParaExcluir] = useState<Cliente | null>(null);
+  const [modalExcluirClienteAberto, setModalExcluirClienteAberto] = useState(false);
+  const [excluindoCliente, setExcluindoCliente] = useState(false);
 
   // Modais
   const [modalFormAberto, setModalFormAberto] = useState(false);
@@ -229,52 +277,166 @@ export default function AreaCorretor() {
   const [apoliceParaExcluir, setApoliceParaExcluir] = useState<Apolice | null>(null);
   const [erroForm, setErroForm] = useState('');
 
-  // Sincronizar apólices no localStorage para persistência de sessão
+  // Sincronizar apólices no localStorage para persistência de sessão e compartilhamento com o cliente
   useEffect(() => {
     localStorage.setItem('segurae_apolices_corretor', JSON.stringify(apolices));
+    localStorage.setItem('segurae_apolices_compartilhadas', JSON.stringify(apolices));
   }, [apolices]);
 
-  // Carregar dados da API
+  // Sincronizar clientes no localStorage
+  useEffect(() => {
+    salvarClientesCorretor(clientesDisponiveis);
+  }, [clientesDisponiveis]);
+
+  // Carregar dados da API com resiliência total e prioridade para os dados locais do front
   const carregarApolicesApi = useCallback(async () => {
     setCarregando(true);
     try {
       const header = getAuthHeader(usuario?.token);
-      const dados = await buscar('/apolices', undefined, header);
-      if (Array.isArray(dados) && dados.length > 0) {
-        setApolices(dados);
-        setStatusApi('online');
-      } else {
-        setStatusApi('online');
+      const excluidos = getClientesExcluidos();
+
+      // Ler apólices locais salvas no localStorage
+      const salvasLocaisRaw =
+        localStorage.getItem('segurae_apolices_corretor') ||
+        localStorage.getItem('segurae_apolices_compartilhadas');
+      let apolicesLocais: Apolice[] = [];
+      if (salvasLocaisRaw) {
+        try {
+          apolicesLocais = JSON.parse(salvasLocaisRaw);
+        } catch {
+          apolicesLocais = [];
+        }
+      }
+
+      try {
+        const dados = await buscar<Apolice[]>('/apolices', undefined, header);
+        if (Array.isArray(dados) && dados.length > 0) {
+          const apolicesValidas = dados.filter((a) => {
+            if (a.cliente && isClienteExcluido(a.cliente, excluidos)) return false;
+            if (
+              a.usuario &&
+              isClienteExcluido(
+                { id: a.usuario.id, email: a.usuario.usuario || a.usuario.email, nomeCompleto: a.usuario.nome },
+                excluidos
+              )
+            )
+              return false;
+            return true;
+          });
+
+          // Unir apólices remotas com as locais (preservando todas as locais criadas no front)
+          const mapApolices = new Map<string | number, Apolice>();
+          apolicesValidas.forEach((a) => {
+            const k = a.id ?? a.numeroApolice;
+            if (k !== undefined && k !== '') mapApolices.set(k, a);
+          });
+          apolicesLocais.forEach((a) => {
+            const k = a.id ?? a.numeroApolice;
+            if (k !== undefined && k !== '') mapApolices.set(k, a);
+          });
+
+          const uniao = Array.from(mapApolices.values()).filter(
+            (a) => !a.cliente || !isClienteExcluido(a.cliente, excluidos)
+          );
+
+          if (uniao.length > 0) {
+            setApolices(uniao);
+            localStorage.setItem('segurae_apolices_compartilhadas', JSON.stringify(uniao));
+            localStorage.setItem('segurae_apolices_corretor', JSON.stringify(uniao));
+          }
+          setStatusApi('online');
+        } else {
+          setStatusApi('online');
+        }
+      } catch {
+        setStatusApi('offline');
+      }
+
+      // Buscar clientes e usuários com perfil ROLE_CLIENTE para vincular no formulário
+      try {
+        const [resClientes, resUsuarios] = await Promise.allSettled([
+          buscar<Cliente[]>('/clientes', undefined, header),
+          buscar<Usuario[]>('/usuarios', undefined, header),
+        ]);
+
+        const listaClientes: Cliente[] =
+          resClientes.status === 'fulfilled' && Array.isArray(resClientes.value)
+            ? resClientes.value.filter((c) => !isClienteExcluido(c, excluidos))
+            : [];
+        const listaUsuarios: Usuario[] =
+          resUsuarios.status === 'fulfilled' && Array.isArray(resUsuarios.value)
+            ? resUsuarios.value.filter(
+                (u) =>
+                  u.perfil === 'ROLE_CLIENTE' &&
+                  !isClienteExcluido({ id: u.id, email: u.usuario || u.email, nomeCompleto: u.nome }, excluidos)
+              )
+            : [];
+
+        setClientesCadastradosNaApi(listaClientes);
+
+        setClientesDisponiveis((prev) => {
+          const mapSegurados = new Map<string, Cliente>();
+
+          // Prioridade 1: Manter clientes já existentes no estado local (não perde clientes cadastrados no front)
+          prev.forEach((c) => {
+            if (!isClienteExcluido(c, excluidos)) {
+              const k = (c.email || c.nomeCompleto || String(c.id)).toLowerCase().trim();
+              mapSegurados.set(k, c);
+            }
+          });
+
+          // Prioridade 2: Clientes vindos da API
+          listaClientes.forEach((c) => {
+            if (!isClienteExcluido(c, excluidos)) {
+              const emailKey = (c.email || c.nomeCompleto).toLowerCase().trim();
+              if (!mapSegurados.has(emailKey)) {
+                mapSegurados.set(emailKey, c);
+              }
+            }
+          });
+
+          // Prioridade 3: Usuários da API com perfil ROLE_CLIENTE
+          listaUsuarios.forEach((u) => {
+            const emailKey = (u.usuario || u.email || u.nome).toLowerCase().trim();
+            if (!mapSegurados.has(emailKey)) {
+              mapSegurados.set(emailKey, {
+                id: u.id,
+                nomeCompleto: u.nome,
+                email: u.usuario || u.email || '',
+                cpfCnpj: '123.456.789-00',
+                dataNascimento: '1990-01-01',
+              });
+            }
+          });
+
+          // Prioridade 4: Clientes padrão que não estejam excluídos
+          CLIENTES_INICIAIS_SISTEMA
+            .filter((c) => !isClienteExcluido(c, excluidos))
+            .forEach((c) => {
+              const emailKey = (c.email || c.nomeCompleto).toLowerCase().trim();
+              if (!mapSegurados.has(emailKey)) {
+                mapSegurados.set(emailKey, c);
+              }
+            });
+
+          const resultado = Array.from(mapSegurados.values());
+          salvarClientesCorretor(resultado);
+          return resultado;
+        });
+      } catch {
+        // ignora
       }
     } catch {
       setStatusApi('offline');
-      // Continua usando os dados do estado/localStorage sem interromper a navegação
     } finally {
       setCarregando(false);
     }
   }, [usuario]);
 
   useEffect(() => {
-    let ativo = true;
-    const buscarInicial = async () => {
-      try {
-        const header = getAuthHeader(usuario?.token);
-        const dados = await buscar('/apolices', undefined, header);
-        if (ativo && Array.isArray(dados) && dados.length > 0) {
-          setApolices(dados);
-          setStatusApi('online');
-        } else if (ativo) {
-          setStatusApi('online');
-        }
-      } catch {
-        if (ativo) setStatusApi('offline');
-      }
-    };
-    buscarInicial();
-    return () => {
-      ativo = false;
-    };
-  }, [usuario]);
+    carregarApolicesApi();
+  }, [carregarApolicesApi]);
+
 
   // Formatações
   const formatarMoeda = (valor: number) => {
@@ -325,13 +487,98 @@ export default function AreaCorretor() {
     });
   }, [apolices, busca, filtroStatus]);
 
-  // Abertura do formulário para nova apólice
+  // Quantidade de apólices vinculadas a cada cliente
+  const contarApolicesPorCliente = useCallback(
+    (clienteId?: number, email?: string) => {
+      if (!clienteId && !email) return 0;
+      const emailLower = email?.toLowerCase().trim();
+      return apolices.filter((a) => {
+        if (clienteId && a.cliente?.id && Number(a.cliente.id) === Number(clienteId)) return true;
+        if (emailLower && a.cliente?.email && a.cliente.email.toLowerCase().trim() === emailLower)
+          return true;
+        if (clienteId && a.usuario?.id && Number(a.usuario.id) === Number(clienteId)) return true;
+        if (emailLower && a.usuario?.usuario && a.usuario.usuario.toLowerCase().trim() === emailLower)
+          return true;
+        return false;
+      }).length;
+    },
+    [apolices]
+  );
+
+  // Filtro de clientes
+  const clientesFiltrados = useMemo(() => {
+    const termo = buscaClientes.toLowerCase().trim();
+    return clientesDisponiveis.filter((cli) => {
+      if (!termo) return true;
+      return (
+        cli.nomeCompleto?.toLowerCase().includes(termo) ||
+        cli.email?.toLowerCase().includes(termo) ||
+        cli.cpfCnpj?.toLowerCase().includes(termo) ||
+        String(cli.id).includes(termo)
+      );
+    });
+  }, [clientesDisponiveis, buscaClientes]);
+
+  // Estatísticas de clientes
+  const statsClientes = useMemo(() => {
+    const total = clientesDisponiveis.length;
+    let comApolices = 0;
+    let semApolices = 0;
+    clientesDisponiveis.forEach((c) => {
+      const qtd = contarApolicesPorCliente(c.id, c.email);
+      if (qtd > 0) comApolices++;
+      else semApolices++;
+    });
+    return { total, comApolices, semApolices };
+  }, [clientesDisponiveis, contarApolicesPorCliente]);
+
+  // Abertura do formulário para nova apólice vinculada a cliente existente
   const handleNovaApolice = () => {
     const codigoAleatorio = Math.random().toString(36).substring(2, 8).toUpperCase();
     const ano = new Date().getFullYear();
+    const primeiroCliente =
+      clientesDisponiveis.length > 0 ? clientesDisponiveis[0] : null;
+    const planoPadrao = OPCOES_COBERTURA[1]; // Completo (Colisão e Terceiros)
+
+    setAbaCliente('existente');
     setFormData({
       ...FORM_INICIAL,
       numeroApolice: `SEG-${ano}-${codigoAleatorio}`,
+      tipoCobertura: planoPadrao.nome,
+      valorApolice: planoPadrao.valorSugerido.toFixed(2),
+      clienteId: primeiroCliente?.id || null,
+      clienteNome: primeiroCliente?.nomeCompleto || '',
+      clienteEmail: primeiroCliente?.email || '',
+      clienteCpfCnpj: primeiroCliente?.cpfCnpj || '',
+      clienteDataNasc: primeiroCliente?.dataNascimento
+        ? (primeiroCliente.dataNascimento.includes('-')
+            ? converterDataIsoParaBr(primeiroCliente.dataNascimento)
+            : primeiroCliente.dataNascimento)
+        : '01/01/1990',
+      clienteSenha: primeiroCliente ? gerarSenhaInicial(primeiroCliente.nomeCompleto) : '',
+    });
+    setErroForm('');
+    setModalFormAberto(true);
+  };
+
+  // Abertura do formulário já na aba de cadastro de novo cliente (campos limpos)
+  const handleAbrirCadastroNovoCliente = () => {
+    const codigoAleatorio = Math.random().toString(36).substring(2, 8).toUpperCase();
+    const ano = new Date().getFullYear();
+    const planoPadrao = OPCOES_COBERTURA[1]; // Completo (Colisão e Terceiros)
+
+    setAbaCliente('novo');
+    setFormData({
+      ...FORM_INICIAL,
+      numeroApolice: `SEG-${ano}-${codigoAleatorio}`,
+      tipoCobertura: planoPadrao.nome,
+      valorApolice: planoPadrao.valorSugerido.toFixed(2),
+      clienteId: null,
+      clienteNome: '',
+      clienteEmail: '',
+      clienteCpfCnpj: '',
+      clienteDataNasc: '',
+      clienteSenha: '',
     });
     setErroForm('');
     setModalFormAberto(true);
@@ -339,6 +586,23 @@ export default function AreaCorretor() {
 
   // Abertura do formulário para edição
   const handleEditarApolice = (apolice: Apolice) => {
+    const cliId = apolice.cliente?.id || null;
+    const clienteEncontrado = clientesDisponiveis.find(
+      (c) =>
+        c.id === cliId ||
+        (c.email &&
+          apolice.cliente?.email &&
+          c.email.toLowerCase().trim() === apolice.cliente.email.toLowerCase().trim())
+    );
+
+    const nomeTitular =
+      clienteEncontrado?.nomeCompleto || apolice.cliente?.nomeCompleto || apolice.usuario?.nome || '';
+
+    const rawNasc = clienteEncontrado?.dataNascimento || apolice.cliente?.dataNascimento || '';
+    const nascFormatada = rawNasc
+      ? (rawNasc.includes('-') ? converterDataIsoParaBr(rawNasc) : rawNasc)
+      : '01/01/1990';
+
     setFormData({
       id: apolice.id,
       numeroApolice: apolice.numeroApolice || '',
@@ -352,13 +616,32 @@ export default function AreaCorretor() {
       dataInicio: apolice.dataInicio || '',
       dataTermino: apolice.dataTermino || '',
       statusApolice: apolice.statusApolice ?? 1,
-      clienteNome: apolice.cliente?.nomeCompleto || apolice.usuario?.nome || '',
-      clienteEmail: apolice.cliente?.email || apolice.usuario?.email || '',
-      clienteCpfCnpj: apolice.cliente?.cpfCnpj || '',
-      clienteDataNasc: apolice.cliente?.dataNascimento || '1990-01-01',
+      clienteId: clienteEncontrado?.id || cliId,
+      clienteNome: nomeTitular,
+      clienteEmail: clienteEncontrado?.email || apolice.cliente?.email || apolice.usuario?.email || '',
+      clienteCpfCnpj: clienteEncontrado?.cpfCnpj || apolice.cliente?.cpfCnpj || '',
+      clienteDataNasc: nascFormatada,
+      clienteSenha: gerarSenhaInicial(nomeTitular),
     });
     setErroForm('');
     setModalFormAberto(true);
+  };
+
+  // Atualizar tipo de cobertura e calcular valor automaticamente
+  const selecionarPlanoCobertura = (nomePlano: string) => {
+    const opcao = OPCOES_COBERTURA.find((p) => p.nome === nomePlano);
+    if (opcao) {
+      setFormData((prev) => ({
+        ...prev,
+        tipoCobertura: opcao.nome,
+        valorApolice: opcao.valorSugerido.toFixed(2),
+      }));
+    } else {
+      setFormData((prev) => ({
+        ...prev,
+        tipoCobertura: nomePlano,
+      }));
+    }
   };
 
   // Abertura do modal de visualização
@@ -388,7 +671,12 @@ export default function AreaCorretor() {
         }
       }
 
-      setApolices((prev) => prev.filter((item) => item.id !== apoliceParaExcluir.id));
+      setApolices((prev) => {
+        const atualizadas = prev.filter((item) => item.id !== apoliceParaExcluir.id);
+        localStorage.setItem('segurae_apolices_compartilhadas', JSON.stringify(atualizadas));
+        localStorage.setItem('segurae_apolices_corretor', JSON.stringify(atualizadas));
+        return atualizadas;
+      });
       ToastAlerta(`Apólice ${apoliceParaExcluir.numeroApolice} excluída com sucesso!`, 'sucesso');
       setModalExcluirAberto(false);
       setApoliceParaExcluir(null);
@@ -396,6 +684,157 @@ export default function AreaCorretor() {
       ToastAlerta('Erro ao excluir apólice.', 'erro');
     } finally {
       setSalvando(false);
+    }
+  };
+
+  // Abertura do modal de exclusão de cliente
+  const handleExcluirClienteClique = (cliente: Cliente) => {
+    setClienteParaExcluir(cliente);
+    setModalExcluirClienteAberto(true);
+  };
+
+  // Confirmação de exclusão do cliente
+  const handleConfirmarExclusaoCliente = async () => {
+    if (!clienteParaExcluir) return;
+    setExcluindoCliente(true);
+
+    try {
+      const header = getAuthHeader(usuario?.token);
+      const emailAlvo = (clienteParaExcluir.email || '').toLowerCase().trim();
+      const nomeAlvo = (clienteParaExcluir.nomeCompleto || '').toLowerCase().trim();
+      const idAlvo = clienteParaExcluir.id ? Number(clienteParaExcluir.id) : undefined;
+
+      // 1. Excluir apólices vinculadas no backend para manter integridade e evitar falha de chave estrangeira
+      const apolicesParaRemover = apolices.filter((a) => {
+        if (idAlvo && a.cliente?.id && Number(a.cliente.id) === idAlvo) return true;
+        if (emailAlvo && a.cliente?.email && a.cliente.email.toLowerCase().trim() === emailAlvo) return true;
+        if (idAlvo && a.usuario?.id && Number(a.usuario.id) === idAlvo) return true;
+        if (emailAlvo && a.usuario?.usuario && a.usuario.usuario.toLowerCase().trim() === emailAlvo) return true;
+        return false;
+      });
+
+      for (const ap of apolicesParaRemover) {
+        if (ap.id) {
+          try {
+            await deletar(`/apolices/${ap.id}`, header);
+          } catch (err) {
+            console.warn(`Erro ao excluir apólice ${ap.id} vinculada ao cliente:`, err);
+          }
+        }
+      }
+
+      // 2. Excluir entidade Cliente em /clientes (se existir na base)
+      if (idAlvo) {
+        try {
+          await deletar(`/clientes/${idAlvo}`, header);
+        } catch {
+          // Pode retornar 404 se o ID era de Usuario, segue normalmente
+        }
+      }
+      const outrosClientesMesmoEmail = clientesCadastradosNaApi.filter(
+        (c) => c.email && c.email.toLowerCase().trim() === emailAlvo && c.id !== idAlvo
+      );
+      for (const c of outrosClientesMesmoEmail) {
+        if (c.id) {
+          try {
+            await deletar(`/clientes/${c.id}`, header);
+          } catch {
+            // ignora
+          }
+        }
+      }
+
+      // 3. Excluir conta de Usuario em /usuarios (onde residem os cadastros com ROLE_CLIENTE)
+      try {
+        if (idAlvo) {
+          try {
+            await deletar(`/usuarios/${idAlvo}`, header);
+          } catch {
+            // ignora
+          }
+        }
+
+        // Buscar lista atual de usuários para garantir remoção de conta com o mesmo e-mail
+        if (emailAlvo) {
+          const usuariosAtuais = await buscar<Usuario[]>('/usuarios', undefined, header);
+          if (Array.isArray(usuariosAtuais)) {
+            const usuariosCorrespondentes = usuariosAtuais.filter((u) => {
+              const uEmail = (u.usuario || u.email || '').toLowerCase().trim();
+              return uEmail === emailAlvo || (idAlvo && u.id === idAlvo);
+            });
+            for (const u of usuariosCorrespondentes) {
+              if (u.id) {
+                try {
+                  await deletar(`/usuarios/${u.id}`, header);
+                } catch (err) {
+                  console.warn(`Aviso ao excluir /usuarios/${u.id}:`, err);
+                }
+              }
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('Erro ao verificar /usuarios para exclusão:', err);
+      }
+
+      // 4. Salvar cliente na blacklist persistente de excluídos
+      const listaExcluidos = getClientesExcluidos();
+      const novoExcluido: ClienteExcluido = {
+        id: idAlvo,
+        email: emailAlvo || undefined,
+        nome: nomeAlvo || undefined,
+      };
+      const excluidosAtualizados = [
+        ...listaExcluidos.filter(
+          (item) =>
+            (!idAlvo || item.id !== idAlvo) &&
+            (!emailAlvo || item.email !== emailAlvo)
+        ),
+        novoExcluido,
+      ];
+      localStorage.setItem('segurae_clientes_excluidos', JSON.stringify(excluidosAtualizados));
+
+      // 5. Remover cliente do estado local
+      setClientesDisponiveis((prev) =>
+        prev.filter((c) => !isClienteExcluido(c, excluidosAtualizados))
+      );
+      setClientesCadastradosNaApi((prev) =>
+        prev.filter((c) => !isClienteExcluido(c, excluidosAtualizados))
+      );
+
+      // 6. Atualizar apólices associadas no estado e localStorage
+      setApolices((prev) => {
+        const atualizadas = prev.filter((a) => {
+          if (idAlvo && a.cliente?.id && Number(a.cliente.id) === idAlvo) return false;
+          if (
+            emailAlvo &&
+            a.cliente?.email &&
+            a.cliente.email.toLowerCase().trim() === emailAlvo
+          ) {
+            return false;
+          }
+          if (idAlvo && a.usuario?.id && Number(a.usuario.id) === idAlvo) return false;
+          if (
+            emailAlvo &&
+            a.usuario?.usuario &&
+            a.usuario.usuario.toLowerCase().trim() === emailAlvo
+          ) {
+            return false;
+          }
+          return true;
+        });
+        localStorage.setItem('segurae_apolices_compartilhadas', JSON.stringify(atualizadas));
+        localStorage.setItem('segurae_apolices_corretor', JSON.stringify(atualizadas));
+        return atualizadas;
+      });
+
+      ToastAlerta(`Cliente ${clienteParaExcluir.nomeCompleto} excluído com sucesso!`, 'sucesso');
+      setModalExcluirClienteAberto(false);
+      setClienteParaExcluir(null);
+    } catch {
+      ToastAlerta('Erro ao excluir cliente.', 'erro');
+    } finally {
+      setExcluindoCliente(false);
     }
   };
 
@@ -429,16 +868,151 @@ export default function AreaCorretor() {
       setErroForm('A data de término não pode ser anterior à data de início.');
       return;
     }
-    if (!formData.clienteNome.trim()) {
-      setErroForm('Informe o nome do cliente / segurado.');
+    if (!formData.clienteNome.trim() || !formData.clienteEmail.trim()) {
+      setErroForm('Por favor, informe o nome e o e-mail do cliente segurado.');
       return;
     }
 
-    setSalvando(true);
+    if (abaCliente === 'novo') {
+      if (!formData.clienteDataNasc.trim()) {
+        setErroForm('Por favor, informe a data de nascimento do cliente segurado.');
+        return;
+      }
+      const idadeSegurado = calcularIdade(formData.clienteDataNasc);
+      if (idadeSegurado === -1) {
+        setErroForm('Informe uma data de nascimento válida no formato dia/mês/ano (DD/MM/AAAA).');
+        return;
+      }
+      if (idadeSegurado < 18) {
+        setErroForm('O cliente segurado deve ter pelo menos 18 anos de idade para ser cadastrado.');
+        return;
+      }
+    }
 
-    const apolicePayload: Apolice = {
-      id: formData.id,
-      numeroApolice: formData.numeroApolice || `SEG-${new Date().getFullYear()}-${Math.floor(100000 + Math.random() * 900000)}`,
+    setSalvando(true);
+    const header = getAuthHeader(usuario?.token);
+
+    const emailSegurado = formData.clienteEmail.trim().toLowerCase();
+    const nomeSegurado = formData.clienteNome.trim();
+    const cpfSegurado = formData.clienteCpfCnpj ? formData.clienteCpfCnpj.trim() : '000.000.000-00';
+    const nascSegurado = converterDataBrParaIso(formData.clienteDataNasc) || '1990-01-01';
+    const senhaClienteFinal = formData.clienteSenha?.trim() || gerarSenhaInicial(nomeSegurado);
+
+    let clienteFinal: Cliente;
+
+    if (abaCliente === 'novo') {
+      // 1. Gera ID único para o novo cliente no front-end
+      const novoClienteId = Date.now();
+      clienteFinal = {
+        id: novoClienteId,
+        nomeCompleto: nomeSegurado,
+        email: emailSegurado,
+        cpfCnpj: cpfSegurado,
+        dataNascimento: nascSegurado,
+      };
+
+      // 2. Registra o novo cliente na lista de clientes disponíveis do front e persiste no localStorage
+      setClientesDisponiveis((prev) => {
+        const semDuplicado = prev.filter(
+          (c) =>
+            c.email?.toLowerCase().trim() !== emailSegurado &&
+            c.nomeCompleto?.toLowerCase().trim() !== nomeSegurado.toLowerCase()
+        );
+        const atualizados = [clienteFinal, ...semDuplicado];
+        salvarClientesCorretor(atualizados);
+        return atualizados;
+      });
+
+      // 3. Cadastra credencial simulada no localStorage para login local imediato
+      try {
+        const rawLocais = localStorage.getItem('segurae_usuarios_locais');
+        const listaLocais = rawLocais ? JSON.parse(rawLocais) : [];
+        const atualizadaLocais = [
+          ...listaLocais.filter((u: { usuario?: string }) => u.usuario?.toLowerCase().trim() !== emailSegurado),
+          {
+            id: novoClienteId,
+            nome: nomeSegurado,
+            usuario: emailSegurado,
+            senha: senhaClienteFinal,
+            perfil: 'ROLE_CLIENTE',
+          },
+        ];
+        localStorage.setItem('segurae_usuarios_locais', JSON.stringify(atualizadaLocais));
+      } catch {
+        // ignora
+      }
+
+      // Se este cliente estava na blacklist de excluídos, remove para reativação limpa
+      const listaExcluidosAtual = getClientesExcluidos();
+      if (
+        listaExcluidosAtual.some(
+          (e) => e.email === emailSegurado || e.nome?.toLowerCase() === nomeSegurado.toLowerCase()
+        )
+      ) {
+        const limpa = listaExcluidosAtual.filter(
+          (e) => e.email !== emailSegurado && e.nome?.toLowerCase() !== nomeSegurado.toLowerCase()
+        );
+        localStorage.setItem('segurae_clientes_excluidos', JSON.stringify(limpa));
+      }
+
+      // 4. Fire-and-forget: tenta sincronizar na API em background (sem travar nem sobrescrever o cliente com Juliana)
+      (async () => {
+        try {
+          await cadastrarUsuario('/usuarios/cadastrar', {
+            id: 0,
+            nome: nomeSegurado,
+            usuario: emailSegurado,
+            senha: senhaClienteFinal,
+            foto: '',
+            perfil: 'ROLE_CLIENTE',
+          });
+        } catch {
+          // ignora erro do backend
+        }
+        try {
+          const cpfDigitos = cpfSegurado.replace(/\D/g, '');
+          const cpfValido =
+            cpfDigitos.length >= 11
+              ? cpfDigitos
+              : `${Math.floor(10000000000 + Math.random() * 89999999999)}`;
+          await cadastrar<Cliente>(
+            '/clientes/cadastrar',
+            {
+              nomeCompleto: nomeSegurado,
+              email: emailSegurado,
+              cpfCnpj: cpfValido,
+              dataNascimento: nascSegurado,
+            },
+            undefined,
+            header
+          );
+        } catch {
+          // ignora erro do backend
+        }
+      })();
+    } else {
+      // Cliente existente selecionado
+      const cliExistente = clientesDisponiveis.find(
+        (c) => c.id === formData.clienteId || (c.email && c.email.toLowerCase().trim() === emailSegurado)
+      );
+      clienteFinal = cliExistente || {
+        id: formData.clienteId || Date.now(),
+        nomeCompleto: nomeSegurado,
+        email: emailSegurado,
+        cpfCnpj: cpfSegurado,
+        dataNascimento: nascSegurado,
+      };
+    }
+
+    const numeroApoliceGerado =
+      formData.numeroApolice ||
+      `SEG-${new Date().getFullYear()}-${Math.floor(100000 + Math.random() * 900000)}`;
+
+    const idApoliceFinal = formData.id || Date.now();
+
+    const apoliceCompleta: Apolice = {
+      id: idApoliceFinal,
+      numeroApolice: numeroApoliceGerado,
       bemSegurado: formData.bemSegurado,
       marcaModelo: formData.marcaModelo.trim(),
       anoModelo: Number(formData.anoModelo) || 2024,
@@ -449,13 +1023,7 @@ export default function AreaCorretor() {
       dataInicio: formData.dataInicio,
       dataTermino: formData.dataTermino,
       statusApolice: Number(formData.statusApolice),
-      cliente: {
-        id: formData.id ? apoliceSelecionada?.cliente?.id || formData.id : Date.now(),
-        nomeCompleto: formData.clienteNome.trim(),
-        email: formData.clienteEmail.trim() || 'cliente@segurae.com.br',
-        cpfCnpj: formData.clienteCpfCnpj.trim() || '000.000.000-00',
-        dataNascimento: formData.clienteDataNasc || '1990-01-01',
-      },
+      cliente: clienteFinal,
       usuario: {
         id: usuario.id || 1,
         nome: usuario.nome || 'Mariana Silva (Corretora)',
@@ -465,44 +1033,59 @@ export default function AreaCorretor() {
       },
     };
 
-    try {
-      const header = getAuthHeader(usuario?.token);
-
-      if (formData.id) {
-        // EDIÇÃO (PUT)
-        try {
-          await atualizar('/apolices', apolicePayload, undefined, header);
-        } catch {
-          // Fallback resiliente
-        }
-
-        setApolices((prev) =>
-          prev.map((item) => (item.id === formData.id ? { ...item, ...apolicePayload } : item))
-        );
-        ToastAlerta('Apólice atualizada com sucesso!', 'sucesso');
-      } else {
-        // CRIAÇÃO (POST)
-        let apoliceCriada = apolicePayload;
-        try {
-          const respostaApi = await cadastrar('/apolices', apolicePayload, undefined, header);
-          if (respostaApi && respostaApi.id) {
-            apoliceCriada = respostaApi;
-          }
-        } catch {
-          // Fallback resiliente com ID temporário
-          apoliceCriada = { ...apolicePayload, id: Date.now() };
-        }
-
-        setApolices((prev) => [apoliceCriada, ...prev]);
-        ToastAlerta('Nova apólice cadastrada com sucesso!', 'sucesso');
-      }
-
-      setModalFormAberto(false);
-    } catch {
-      ToastAlerta('Ocorreu um erro ao salvar a apólice.', 'erro');
-    } finally {
-      setSalvando(false);
+    if (formData.id) {
+      // EDIÇÃO
+      setApolices((prev) => {
+        const atualizadas = prev.map((item) => (item.id === formData.id ? apoliceCompleta : item));
+        localStorage.setItem('segurae_apolices_compartilhadas', JSON.stringify(atualizadas));
+        localStorage.setItem('segurae_apolices_corretor', JSON.stringify(atualizadas));
+        return atualizadas;
+      });
+      ToastAlerta('Apólice atualizada com sucesso!', 'sucesso');
+    } else {
+      // CRIAÇÃO
+      setApolices((prev) => {
+        const atualizadas = [apoliceCompleta, ...prev];
+        localStorage.setItem('segurae_apolices_compartilhadas', JSON.stringify(atualizadas));
+        localStorage.setItem('segurae_apolices_corretor', JSON.stringify(atualizadas));
+        return atualizadas;
+      });
+      ToastAlerta(
+        `Apólice cadastrada com sucesso para ${clienteFinal.nomeCompleto}! Senha de acesso: ${senhaClienteFinal}`,
+        'sucesso'
+      );
     }
+
+    // Fire-and-forget: Tenta sincronizar com o backend em segundo plano de forma resiliente
+    (async () => {
+      try {
+        const apoliceApiPayload = {
+          ...(formData.id ? { id: formData.id } : {}),
+          numeroApolice: apoliceCompleta.numeroApolice,
+          bemSegurado: apoliceCompleta.bemSegurado,
+          marcaModelo: apoliceCompleta.marcaModelo,
+          anoModelo: apoliceCompleta.anoModelo,
+          placa: apoliceCompleta.placa,
+          renavam: apoliceCompleta.renavam,
+          valorApolice: apoliceCompleta.valorApolice,
+          tipoCobertura: apoliceCompleta.tipoCobertura,
+          dataInicio: apoliceCompleta.dataInicio,
+          dataTermino: apoliceCompleta.dataTermino,
+          statusApolice: apoliceCompleta.statusApolice,
+          cliente: { id: clienteFinal.id },
+        };
+        if (formData.id) {
+          await atualizar('/apolices', apoliceApiPayload, undefined, header);
+        } else {
+          await cadastrar('/apolices', apoliceApiPayload, undefined, header);
+        }
+      } catch {
+        // ignora
+      }
+    })();
+
+    setModalFormAberto(false);
+    setSalvando(false);
   };
 
   // Renderizador de Badge de Status
@@ -660,9 +1243,253 @@ export default function AreaCorretor() {
         </div>
 
         {/* ========================================================================= */}
-        {/* CARDS DE MÉTRICAS (KPIS)                                                  */}
+        {/* NAVEGAÇÃO PRINCIPAL: APÓLICES DE SEGUROS vs GESTÃO DE CLIENTES            */}
         {/* ========================================================================= */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+        <div className="flex items-center justify-between flex-wrap gap-4 mb-8 bg-white p-2.5 rounded-3xl border border-zinc-200/80 shadow-xs">
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setAbaPrincipal('apolices');
+                setSearchParams({});
+              }}
+              className={`px-5 py-2.5 rounded-2xl text-xs sm:text-sm font-extrabold flex items-center gap-2.5 transition-all cursor-pointer ${
+                abaPrincipal === 'apolices'
+                  ? 'bg-zinc-900 text-white shadow-md'
+                  : 'text-zinc-600 hover:text-zinc-900 hover:bg-zinc-100'
+              }`}
+            >
+              <FileText size={18} weight="bold" />
+              <span>Apólices de Seguros</span>
+              <span
+                className={`px-2 py-0.5 rounded-full text-[11px] font-black ${
+                  abaPrincipal === 'apolices'
+                    ? 'bg-red-600 text-white'
+                    : 'bg-zinc-200 text-zinc-700'
+                }`}
+              >
+                {apolices.length}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setAbaPrincipal('clientes');
+                setSearchParams({ aba: 'clientes' });
+              }}
+              className={`px-5 py-2.5 rounded-2xl text-xs sm:text-sm font-extrabold flex items-center gap-2.5 transition-all cursor-pointer ${
+                abaPrincipal === 'clientes'
+                  ? 'bg-red-600 text-white shadow-md shadow-red-600/25'
+                  : 'text-zinc-600 hover:text-zinc-900 hover:bg-zinc-100'
+              }`}
+            >
+              <Users size={18} weight="bold" />
+              <span>Gestão de Clientes</span>
+              <span
+                className={`px-2 py-0.5 rounded-full text-[11px] font-black ${
+                  abaPrincipal === 'clientes'
+                    ? 'bg-white text-red-600'
+                    : 'bg-zinc-200 text-zinc-700'
+                }`}
+              >
+                {clientesDisponiveis.length}
+              </span>
+            </button>
+          </div>
+
+          <div className="hidden sm:flex items-center gap-2 pr-2 text-xs text-zinc-500">
+            {abaPrincipal === 'apolices' ? (
+              <span>Gerenciamento de contratos, veículos e coberturas</span>
+            ) : (
+              <span>Consulte a base de segurados e realize exclusões na API</span>
+            )}
+          </div>
+        </div>
+
+        {abaPrincipal === 'clientes' ? (
+          <div>
+            {/* CARDS DE MÉTRICAS DA GESTÃO DE CLIENTES */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+              <div className="bg-white p-5 rounded-2xl border border-zinc-200/80 shadow-xs flex items-center gap-4">
+                <div className="w-12 h-12 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+                  <Users size={24} weight="fill" />
+                </div>
+                <div>
+                  <p className="text-xs text-zinc-500 font-medium">Total de Clientes</p>
+                  <p className="text-2xl font-black text-zinc-900">{statsClientes.total}</p>
+                </div>
+              </div>
+
+              <div className="bg-white p-5 rounded-2xl border border-zinc-200/80 shadow-xs flex items-center gap-4">
+                <div className="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+                  <ShieldCheck size={24} weight="fill" />
+                </div>
+                <div>
+                  <p className="text-xs text-zinc-500 font-medium">Clientes com Apólices</p>
+                  <p className="text-2xl font-black text-emerald-600">{statsClientes.comApolices}</p>
+                </div>
+              </div>
+
+              <div className="bg-white p-5 rounded-2xl border border-zinc-200/80 shadow-xs flex items-center gap-4">
+                <div className="w-12 h-12 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
+                  <UserMinus size={24} weight="bold" />
+                </div>
+                <div>
+                  <p className="text-xs text-zinc-500 font-medium">Sem Apólices Ativas</p>
+                  <p className="text-2xl font-black text-amber-600">{statsClientes.semApolices}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* BARRA DE BUSCA E AÇÕES DE CLIENTES */}
+            <div className="bg-white p-4 rounded-2xl border border-zinc-200/80 shadow-xs mb-6 flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div className="relative w-full sm:w-96">
+                <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-400">
+                  <MagnifyingGlass size={18} />
+                </span>
+                <input
+                  type="text"
+                  value={buscaClientes}
+                  onChange={(e) => setBuscaClientes(e.target.value)}
+                  placeholder="Buscar por nome, e-mail ou CPF..."
+                  className="w-full pl-10 pr-4 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl text-xs sm:text-sm text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-red-600 focus:bg-white transition-all"
+                />
+                {buscaClientes && (
+                  <button
+                    onClick={() => setBuscaClientes('')}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600 text-xs cursor-pointer"
+                  >
+                    Limpar
+                  </button>
+                )}
+              </div>
+
+              <div className="flex items-center justify-between w-full sm:w-auto gap-3">
+                <span className="text-xs text-zinc-500 font-medium">
+                  Exibindo <strong>{clientesFiltrados.length}</strong> de {clientesDisponiveis.length} cadastrados
+                </span>
+
+                <button
+                  type="button"
+                  onClick={handleAbrirCadastroNovoCliente}
+                  className="px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 shadow-sm shadow-red-600/20 transition-all cursor-pointer"
+                >
+                  <Plus size={16} weight="bold" />
+                  <span>+ Novo Cliente</span>
+                </button>
+              </div>
+            </div>
+
+            {/* TABELA DE GESTÃO E EXCLUSÃO DE CLIENTES */}
+            <div className="bg-white rounded-3xl border border-zinc-200/80 shadow-xs overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="bg-zinc-100/70 border-b border-zinc-200 text-zinc-500 font-bold uppercase tracking-wider text-[11px]">
+                      <th className="py-3.5 px-4">Cliente / Segurado</th>
+                      <th className="py-3.5 px-4">E-mail de Login</th>
+                      <th className="py-3.5 px-4">CPF / CNPJ</th>
+                      <th className="py-3.5 px-4">Data Nasc.</th>
+                      <th className="py-3.5 px-4">Apólices Vinculadas</th>
+                      <th className="py-3.5 px-4 text-center">Ações</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-zinc-100">
+                    {clientesFiltrados.length === 0 ? (
+                      <tr>
+                        <td colSpan={6} className="py-12 text-center text-zinc-500">
+                          <User size={36} className="mx-auto text-zinc-300 mb-2" />
+                          <p className="font-semibold">Nenhum cliente encontrado com os filtros informados.</p>
+                          {buscaClientes && (
+                            <button
+                              onClick={() => setBuscaClientes('')}
+                              className="mt-2 text-red-600 hover:underline font-bold text-xs cursor-pointer"
+                            >
+                              Limpar busca
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    ) : (
+                      clientesFiltrados.map((cli) => {
+                        const totalApolicesCli = contarApolicesPorCliente(cli.id, cli.email);
+                        const inicial = cli.nomeCompleto ? cli.nomeCompleto.charAt(0).toUpperCase() : 'C';
+
+                        return (
+                          <tr key={`${cli.id}-${cli.email}`} className="hover:bg-zinc-50/70 transition-colors">
+                            <td className="py-3.5 px-4">
+                              <div className="flex items-center gap-3">
+                                <div className="w-8 h-8 rounded-full bg-red-100 text-red-700 flex items-center justify-center font-bold text-xs shrink-0">
+                                  {inicial}
+                                </div>
+                                <div>
+                                  <span className="font-bold text-zinc-900 block">
+                                    {cli.nomeCompleto}
+                                  </span>
+                                  <span className="text-[10px] text-zinc-400 font-mono">
+                                    ID: #{cli.id || '---'}
+                                  </span>
+                                </div>
+                              </div>
+                            </td>
+
+                            <td className="py-3.5 px-4 font-medium text-zinc-700">
+                              <a
+                                href={`mailto:${cli.email}`}
+                                className="hover:text-red-600 transition-colors"
+                              >
+                                {cli.email}
+                              </a>
+                            </td>
+
+                            <td className="py-3.5 px-4 font-mono font-medium text-zinc-600">
+                              {cli.cpfCnpj || 'Não informado'}
+                            </td>
+
+                            <td className="py-3.5 px-4 text-zinc-600">
+                              {cli.dataNascimento ? formatarData(cli.dataNascimento) : '---'}
+                            </td>
+
+                            <td className="py-3.5 px-4">
+                              {totalApolicesCli > 0 ? (
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                  <ShieldCheck size={14} weight="fill" />
+                                  <span>{totalApolicesCli} apólice(s)</span>
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-zinc-100 text-zinc-500 border border-zinc-200">
+                                  <span>Sem apólices</span>
+                                </span>
+                              )}
+                            </td>
+
+                            <td className="py-3.5 px-4 text-center">
+                              <button
+                                type="button"
+                                onClick={() => handleExcluirClienteClique(cli)}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-50 hover:bg-red-600 text-red-600 hover:text-white border border-red-200 font-bold text-xs transition-all cursor-pointer shadow-xs"
+                                title={`Excluir cliente ${cli.nomeCompleto}`}
+                              >
+                                <Trash size={15} weight="bold" />
+                                <span>Excluir</span>
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div>
+            {/* ========================================================================= */}
+            {/* CARDS DE MÉTRICAS (KPIS)                                                  */}
+            {/* ========================================================================= */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
           <div className="bg-white p-5 rounded-2xl border border-zinc-200/80 shadow-xs flex items-center gap-4">
             <div className="w-12 h-12 rounded-xl bg-zinc-100 text-zinc-800 flex items-center justify-center shrink-0">
               <FileText size={24} weight="fill" />
@@ -1058,7 +1885,9 @@ export default function AreaCorretor() {
             ))}
           </div>
         )}
-      </main>
+      </div>
+    )}
+    </main>
 
       {/* ========================================================================= */}
       {/* MODAL 1: FORMULÁRIO DE CADASTRO E EDIÇÃO                                  */}
@@ -1129,8 +1958,9 @@ export default function AreaCorretor() {
                     </div>
 
                     <div>
-                      <label className="block text-zinc-700 font-semibold mb-1">
-                        Valor da Apólice (R$) *
+                      <label className="block text-zinc-700 font-semibold mb-1 flex items-center justify-between">
+                        <span>Valor da Apólice (R$) *</span>
+                        <span className="text-[10px] text-emerald-600 font-bold">Auto-calculado</span>
                       </label>
                       <input
                         type="number"
@@ -1139,7 +1969,7 @@ export default function AreaCorretor() {
                         onChange={(e) =>
                           setFormData({ ...formData, valorApolice: e.target.value })
                         }
-                        placeholder="Ex: 3850.00"
+                        placeholder="Ex: 2950.00"
                         className="w-full px-3 py-2 bg-zinc-50 border border-zinc-200 rounded-xl text-zinc-900 font-bold focus:ring-2 focus:ring-red-600 focus:outline-none"
                       />
                     </div>
@@ -1161,19 +1991,63 @@ export default function AreaCorretor() {
                       </select>
                     </div>
 
-                    <div className="sm:col-span-3">
-                      <label className="block text-zinc-700 font-semibold mb-1">
-                        Tipo de Cobertura Contratada *
-                      </label>
-                      <input
-                        type="text"
-                        value={formData.tipoCobertura}
-                        onChange={(e) =>
-                          setFormData({ ...formData, tipoCobertura: e.target.value })
-                        }
-                        placeholder="Ex: Total 100% FIPE + Terceiros (R$ 150k)"
-                        className="w-full px-3 py-2 bg-zinc-50 border border-zinc-200 rounded-xl text-zinc-900 focus:ring-2 focus:ring-red-600 focus:outline-none"
-                      />
+                    <div className="sm:col-span-3 bg-zinc-50/70 p-3.5 rounded-2xl border border-zinc-200/80">
+                      <div className="flex items-center justify-between mb-2.5 flex-wrap gap-1">
+                        <label className="block text-zinc-800 font-bold text-xs">
+                          Submenu: Tipo de Cobertura Contratada *
+                        </label>
+                        <span className="text-[11px] text-zinc-500">
+                          Selecione o plano desejado para atualizar o valor automaticamente
+                        </span>
+                      </div>
+
+                      {/* 3 Opções de cobertura em cards visuais e interativos */}
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5">
+                        {OPCOES_COBERTURA.map((plano) => {
+                          const isSelecionado = formData.tipoCobertura === plano.nome;
+                          return (
+                            <button
+                              key={plano.id}
+                              type="button"
+                              onClick={() => selecionarPlanoCobertura(plano.nome)}
+                              className={`text-left p-3 rounded-xl border transition-all cursor-pointer flex flex-col justify-between ${
+                                isSelecionado
+                                  ? 'bg-red-50/90 border-red-500 ring-2 ring-red-500/20 shadow-sm'
+                                  : 'bg-white border-zinc-200 hover:border-zinc-300 hover:bg-zinc-50'
+                              }`}
+                            >
+                              <div>
+                                <div className="flex items-start justify-between gap-1 mb-1.5">
+                                  <span
+                                    className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${
+                                      isSelecionado
+                                        ? 'bg-red-600 text-white'
+                                        : 'bg-zinc-100 text-zinc-700'
+                                    }`}
+                                  >
+                                    {plano.badge}
+                                  </span>
+                                  {isSelecionado && (
+                                    <CheckCircle size={16} weight="fill" className="text-red-600 shrink-0" />
+                                  )}
+                                </div>
+                                <p className="font-bold text-xs text-zinc-900 mb-1 leading-tight">
+                                  {plano.nome}
+                                </p>
+                                <p className="text-[11px] text-zinc-500 mb-2 leading-relaxed">
+                                  {plano.descricao}
+                                </p>
+                              </div>
+                              <div className="pt-2 border-t border-zinc-100 flex items-baseline justify-between">
+                                <span className="text-[10px] text-zinc-400 font-medium">Sugerido</span>
+                                <span className="text-xs font-black text-zinc-900">
+                                  {formatarMoeda(plano.valorSugerido)}
+                                </span>
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
                     </div>
 
                     <div>
@@ -1299,71 +2173,321 @@ export default function AreaCorretor() {
 
                 {/* SEÇÃO 3: TITULAR (CLIENTE / SEGURADO) */}
                 <div className="pt-4 border-t border-zinc-100">
-                  <h4 className="text-xs font-bold text-zinc-500 uppercase tracking-wider mb-3 flex items-center gap-2">
-                    <User size={16} className="text-red-600" />
-                    <span>3. Cliente / Segurado Responsável</span>
-                  </h4>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-                    <div>
-                      <label className="block text-zinc-700 font-semibold mb-1">
-                        Nome Completo do Cliente *
-                      </label>
-                      <input
-                        type="text"
-                        value={formData.clienteNome}
-                        onChange={(e) =>
-                          setFormData({ ...formData, clienteNome: e.target.value })
-                        }
-                        placeholder="Ex: Carlos Eduardo Mendes"
-                        className="w-full px-3 py-2 bg-zinc-50 border border-zinc-200 rounded-xl text-zinc-900 focus:ring-2 focus:ring-red-600 focus:outline-none"
-                      />
-                    </div>
+                  <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+                    <h4 className="text-xs font-bold text-zinc-500 uppercase tracking-wider flex items-center gap-2">
+                      <User size={16} className="text-red-600" />
+                      <span>3. Cliente / Segurado Responsável</span>
+                    </h4>
 
-                    <div>
-                      <label className="block text-zinc-700 font-semibold mb-1">
-                        CPF ou CNPJ
-                      </label>
-                      <input
-                        type="text"
-                        value={formData.clienteCpfCnpj}
-                        onChange={(e) =>
-                          setFormData({ ...formData, clienteCpfCnpj: e.target.value })
-                        }
-                        placeholder="000.000.000-00"
-                        className="w-full px-3 py-2 bg-zinc-50 border border-zinc-200 rounded-xl text-zinc-900 focus:ring-2 focus:ring-red-600 focus:outline-none"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-zinc-700 font-semibold mb-1">
-                        E-mail do Segurado
-                      </label>
-                      <input
-                        type="email"
-                        value={formData.clienteEmail}
-                        onChange={(e) =>
-                          setFormData({ ...formData, clienteEmail: e.target.value })
-                        }
-                        placeholder="cliente@email.com"
-                        className="w-full px-3 py-2 bg-zinc-50 border border-zinc-200 rounded-xl text-zinc-900 focus:ring-2 focus:ring-red-600 focus:outline-none"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-zinc-700 font-semibold mb-1">
-                        Data de Nascimento
-                      </label>
-                      <input
-                        type="date"
-                        value={formData.clienteDataNasc}
-                        onChange={(e) =>
-                          setFormData({ ...formData, clienteDataNasc: e.target.value })
-                        }
-                        className="w-full px-3 py-2 bg-zinc-50 border border-zinc-200 rounded-xl text-zinc-900 focus:ring-2 focus:ring-red-600 focus:outline-none"
-                      />
+                    {/* Alternância de Abas: Selecionar Existente vs Cadastrar Novo */}
+                    <div className="flex items-center gap-1 bg-zinc-100 p-1 rounded-xl">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAbaCliente('existente');
+                          const primeiro =
+                            clientesDisponiveis.length > 0 ? clientesDisponiveis[0] : null;
+                          if (primeiro) {
+                            setFormData({
+                              ...formData,
+                              clienteId: primeiro.id,
+                              clienteNome: primeiro.nomeCompleto,
+                              clienteEmail: primeiro.email,
+                              clienteCpfCnpj: primeiro.cpfCnpj || '',
+                              clienteDataNasc: primeiro.dataNascimento
+                                ? (primeiro.dataNascimento.includes('-')
+                                    ? converterDataIsoParaBr(primeiro.dataNascimento)
+                                    : primeiro.dataNascimento)
+                                : '01/01/1990',
+                              clienteSenha: gerarSenhaInicial(primeiro.nomeCompleto),
+                            });
+                          }
+                        }}
+                        className={`px-3 py-1 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+                          abaCliente === 'existente'
+                            ? 'bg-white text-zinc-900 shadow-sm'
+                            : 'text-zinc-500 hover:text-zinc-800'
+                        }`}
+                      >
+                        Cliente Existente
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAbaCliente('novo');
+                          setFormData({
+                            ...formData,
+                            clienteId: null,
+                            clienteNome: '',
+                            clienteEmail: '',
+                            clienteCpfCnpj: '',
+                            clienteDataNasc: '',
+                            clienteSenha: '',
+                          });
+                        }}
+                        className={`px-3 py-1 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+                          abaCliente === 'novo'
+                            ? 'bg-red-600 text-white shadow-sm'
+                            : 'text-zinc-500 hover:text-zinc-800'
+                        }`}
+                      >
+                        + Cadastrar Novo
+                      </button>
                     </div>
                   </div>
+
+                  {abaCliente === 'existente' ? (
+                    <div>
+                      {/* Seletor de Usuário / Cliente Existente */}
+                      <div className="mb-4 bg-zinc-50/80 p-3.5 rounded-2xl border border-zinc-200">
+                        <label className="block text-zinc-800 font-bold text-xs mb-1.5 flex items-center justify-between">
+                          <span>Selecione o Usuário / Cliente Cadastrado *</span>
+                          <span className="text-[11px] text-zinc-500 font-normal">
+                            ({clientesDisponiveis.length} disponíveis)
+                          </span>
+                        </label>
+                        <select
+                          value={formData.clienteId || ''}
+                          onChange={(e) => {
+                            const cliId = Number(e.target.value);
+                            const cli = clientesDisponiveis.find((c) => c.id === cliId);
+                            if (cli) {
+                              setFormData({
+                                ...formData,
+                                clienteId: cli.id,
+                                clienteNome: cli.nomeCompleto,
+                                clienteEmail: cli.email,
+                                clienteCpfCnpj: cli.cpfCnpj || '',
+                                clienteDataNasc: cli.dataNascimento
+                                  ? (cli.dataNascimento.includes('-')
+                                      ? converterDataIsoParaBr(cli.dataNascimento)
+                                      : cli.dataNascimento)
+                                  : '01/01/1990',
+                              });
+                            }
+                          }}
+                          className="w-full px-3 py-2.5 bg-white border border-zinc-300 rounded-xl text-xs text-zinc-900 font-medium focus:ring-2 focus:ring-red-600 focus:outline-none shadow-sm cursor-pointer"
+                        >
+                          <option value="" disabled>
+                            -- Selecione um usuário cadastrado no sistema --
+                          </option>
+                          {clientesDisponiveis.map((c) => (
+                            <option key={`${c.id}-${c.email}`} value={c.id}>
+                              {c.nomeCompleto} — {c.email} {c.cpfCnpj ? `(${c.cpfCnpj})` : ''}
+                            </option>
+                          ))}
+                        </select>
+                        <p className="text-[11px] text-zinc-500 mt-2 flex items-center gap-1.5">
+                          <ShieldCheck size={14} className="text-emerald-600 shrink-0" />
+                          <span>
+                            A apólice é vinculada diretamente à conta do segurado. Ao realizar login com este e-mail, o titular visualizará esta apólice automaticamente em seu painel.
+                          </span>
+                        </p>
+                      </div>
+
+                      {/* Confirmação dos Dados do Segurado Vinculado */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs bg-zinc-50/50 p-3 rounded-2xl border border-zinc-100">
+                        <div>
+                          <label className="block text-zinc-700 font-semibold mb-1 flex items-center gap-1">
+                            <span>Nome Completo do Segurado</span>
+                            <LockKey size={12} className="text-zinc-400" />
+                          </label>
+                          <input
+                            type="text"
+                            readOnly
+                            value={formData.clienteNome}
+                            placeholder="Nome do cliente selecionado"
+                            className="w-full px-3 py-2 bg-zinc-100 border border-zinc-200 rounded-xl text-zinc-800 font-medium cursor-not-allowed"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-zinc-700 font-semibold mb-1 flex items-center gap-1">
+                            <span>CPF ou CNPJ</span>
+                            <LockKey size={12} className="text-zinc-400" />
+                          </label>
+                          <input
+                            type="text"
+                            value={formData.clienteCpfCnpj}
+                            onChange={(e) =>
+                              setFormData({ ...formData, clienteCpfCnpj: e.target.value })
+                            }
+                            placeholder="000.000.000-00"
+                            className="w-full px-3 py-2 bg-white border border-zinc-200 rounded-xl text-zinc-900 focus:ring-2 focus:ring-red-600 focus:outline-none"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-zinc-700 font-semibold mb-1 flex items-center gap-1">
+                            <span>E-mail do Segurado (Login de Acesso)</span>
+                            <LockKey size={12} className="text-zinc-400" />
+                          </label>
+                          <input
+                            type="email"
+                            readOnly
+                            value={formData.clienteEmail}
+                            placeholder="email@cliente.com"
+                            className="w-full px-3 py-2 bg-zinc-100 border border-zinc-200 rounded-xl text-zinc-800 font-medium cursor-not-allowed"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-zinc-700 font-semibold mb-1">
+                            Data de Nascimento
+                          </label>
+                          <input
+                            type="date"
+                            value={formData.clienteDataNasc}
+                            onChange={(e) =>
+                              setFormData({ ...formData, clienteDataNasc: e.target.value })
+                            }
+                            className="w-full px-3 py-2 bg-white border border-zinc-200 rounded-xl text-zinc-900 focus:ring-2 focus:ring-red-600 focus:outline-none"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div>
+                      {/* Formulário de Cadastro de Novo Cliente */}
+                      <div className="mb-3 bg-red-50/70 p-3 rounded-2xl border border-red-200/80 text-xs text-red-900">
+                        <p className="font-semibold flex items-center gap-1.5 mb-1">
+                          <User size={14} className="text-red-600" />
+                          <span>Cadastrar Novo Cliente no Sistema</span>
+                        </p>
+                        <p className="text-[11px] text-zinc-600">
+                          Preencha os dados do cliente abaixo. O sistema criará automaticamente o cadastro de cliente e uma conta de acesso para que ele possa entrar no sistema.
+                        </p>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs bg-zinc-50/50 p-3 rounded-2xl border border-zinc-100">
+                        <div>
+                          <label className="block text-zinc-700 font-semibold mb-1">
+                            Nome Completo do Cliente *
+                          </label>
+                          <input
+                            type="text"
+                            value={formData.clienteNome}
+                            onChange={(e) => {
+                              const novoNome = e.target.value;
+                              const senhaGerada = gerarSenhaInicial(novoNome);
+                              setFormData({
+                                ...formData,
+                                clienteNome: novoNome,
+                                clienteSenha: senhaGerada,
+                              });
+                            }}
+                            placeholder="Ex: Carlos Eduardo Mendes"
+                            className="w-full px-3 py-2 bg-white border border-zinc-200 rounded-xl text-zinc-900 focus:ring-2 focus:ring-red-600 focus:outline-none"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-zinc-700 font-semibold mb-1">
+                            CPF ou CNPJ *
+                          </label>
+                          <input
+                            type="text"
+                            value={formData.clienteCpfCnpj}
+                            onChange={(e) => {
+                              const v = e.target.value.replace(/\D/g, '');
+                              let formatado: string;
+                              if (v.length <= 11) {
+                                formatado = v
+                                  .replace(/(\d{3})(\d)/, '$1.$2')
+                                  .replace(/(\d{3})(\d)/, '$1.$2')
+                                  .replace(/(\d{3})(\d{1,2})$/, '$1-$2');
+                              } else {
+                                formatado = v
+                                  .substring(0, 14)
+                                  .replace(/^(\d{2})(\d)/, '$1.$2')
+                                  .replace(/^(\d{2})\.(\d{3})(\d)/, '$1.$2.$3')
+                                  .replace(/\.(\d{3})(\d)/, '.$1/$2')
+                                  .replace(/(\d{4})(\d)/, '$1-$2');
+                              }
+                              setFormData({ ...formData, clienteCpfCnpj: formatado });
+                            }}
+                            placeholder="000.000.000-00"
+                            maxLength={18}
+                            className="w-full px-3 py-2 bg-white border border-zinc-200 rounded-xl text-zinc-900 focus:ring-2 focus:ring-red-600 focus:outline-none"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-zinc-700 font-semibold mb-1">
+                            E-mail do Segurado (Login de Acesso) *
+                          </label>
+                          <input
+                            type="email"
+                            value={formData.clienteEmail}
+                            onChange={(e) =>
+                              setFormData({ ...formData, clienteEmail: e.target.value })
+                            }
+                            placeholder="cliente@email.com"
+                            className="w-full px-3 py-2 bg-white border border-zinc-200 rounded-xl text-zinc-900 focus:ring-2 focus:ring-red-600 focus:outline-none"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-zinc-700 font-semibold mb-1">
+                            Data de Nascimento *
+                          </label>
+                          <input
+                            type="text"
+                            maxLength={10}
+                            value={formData.clienteDataNasc}
+                            onChange={(e) =>
+                              setFormData({
+                                ...formData,
+                                clienteDataNasc: formatarDataBR(e.target.value),
+                              })
+                            }
+                            placeholder="DD/MM/AAAA"
+                            className="w-full px-3 py-2 bg-white border border-zinc-200 rounded-xl text-zinc-900 focus:ring-2 focus:ring-red-600 focus:outline-none"
+                          />
+                          {formData.clienteDataNasc.length === 10 && (
+                            <span
+                              className={`text-[11px] font-semibold mt-1 block ${
+                                calcularIdade(formData.clienteDataNasc) >= 18
+                                  ? 'text-emerald-600'
+                                  : calcularIdade(formData.clienteDataNasc) === -1
+                                  ? 'text-amber-600'
+                                  : 'text-red-600'
+                              }`}
+                            >
+                              {calcularIdade(formData.clienteDataNasc) >= 18
+                                ? `Idade: ${calcularIdade(formData.clienteDataNasc)} anos (Permitido)`
+                                : calcularIdade(formData.clienteDataNasc) === -1
+                                ? 'Data de nascimento inválida'
+                                : `Idade: ${calcularIdade(formData.clienteDataNasc)} anos (Menor de 18 anos - não permitido)`}
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="sm:col-span-2">
+                          <label className="block text-zinc-700 font-semibold mb-1 flex items-center justify-between">
+                            <span>Senha Inicial de Acesso do Cliente</span>
+                            <span className="text-[11px] text-emerald-600 font-bold">
+                              Regra: primeiro nome + 1234
+                            </span>
+                          </label>
+                          <input
+                            type="text"
+                            value={formData.clienteSenha || gerarSenhaInicial(formData.clienteNome)}
+                            onChange={(e) =>
+                              setFormData({ ...formData, clienteSenha: e.target.value })
+                            }
+                            placeholder="Ex: carlos1234"
+                            className="w-full px-3 py-2 bg-white border border-zinc-200 rounded-xl text-zinc-900 font-mono text-xs font-bold focus:ring-2 focus:ring-red-600 focus:outline-none"
+                          />
+                          <span className="text-[11px] text-zinc-500 mt-1 block">
+                            Senha gerada automaticamente: <strong className="text-zinc-800 font-mono">{formData.clienteSenha || gerarSenhaInicial(formData.clienteNome)}</strong>. O segurado utilizará este e-mail e senha para acessar o painel do cliente.
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
+
 
               </div>
 
@@ -1584,6 +2708,77 @@ export default function AreaCorretor() {
                 className="flex-1 py-2.5 px-4 bg-red-600 hover:bg-red-700 disabled:bg-red-400 text-white text-xs font-bold rounded-xl shadow-md shadow-red-600/20 transition-colors cursor-pointer flex items-center justify-center gap-1.5"
               >
                 {salvando ? <span>Excluindo...</span> : <span>Sim, Excluir</span>}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL 4: CONFIRMAÇÃO DE EXCLUSÃO DE CLIENTE                                */}
+      {/* ========================================================================= */}
+      {modalExcluirClienteAberto && clienteParaExcluir && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-md w-full shadow-2xl overflow-hidden border border-zinc-200 animate-in fade-in zoom-in-95 duration-200 p-6">
+            <div className="w-12 h-12 rounded-2xl bg-red-100 text-red-600 flex items-center justify-center mb-4 mx-auto">
+              <Trash size={26} weight="bold" />
+            </div>
+
+            <h3 className="text-lg font-extrabold text-zinc-900 text-center mb-2">
+              Excluir Cadastro do Cliente
+            </h3>
+
+            <p className="text-xs text-zinc-500 text-center mb-4 leading-relaxed">
+              Você tem certeza de que deseja excluir o cliente abaixo da base de dados da Seguraê?
+            </p>
+
+            <div className="bg-zinc-50 p-4 rounded-2xl border border-zinc-100 mb-4 text-xs space-y-2">
+              <div className="flex justify-between">
+                <span className="text-zinc-500 font-medium">Nome:</span>
+                <span className="font-bold text-zinc-900">{clienteParaExcluir.nomeCompleto}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-zinc-500 font-medium">E-mail:</span>
+                <span className="font-mono text-zinc-700">{clienteParaExcluir.email}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-zinc-500 font-medium">CPF/CNPJ:</span>
+                <span className="font-mono text-zinc-700">{clienteParaExcluir.cpfCnpj || '---'}</span>
+              </div>
+              <div className="flex justify-between pt-1.5 border-t border-zinc-200/60">
+                <span className="text-zinc-500 font-medium">Apólices vinculadas:</span>
+                <span className="font-bold text-red-600">
+                  {contarApolicesPorCliente(clienteParaExcluir.id, clienteParaExcluir.email)} apólice(s)
+                </span>
+              </div>
+            </div>
+
+            <div className="p-3 bg-red-50/80 border border-red-200 rounded-xl text-[11px] text-red-700 mb-6 flex items-start gap-2">
+              <WarningCircle size={16} weight="fill" className="shrink-0 text-red-600 mt-0.5" />
+              <span>
+                <strong>Atenção:</strong> Esta ação removerá o registro do cliente permanentemente do banco de dados no Render e desvinculará suas apólices associadas.
+              </span>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setModalExcluirClienteAberto(false);
+                  setClienteParaExcluir(null);
+                }}
+                disabled={excluindoCliente}
+                className="flex-1 py-2.5 px-4 bg-zinc-100 hover:bg-zinc-200 text-zinc-800 text-xs font-bold rounded-xl transition-colors cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmarExclusaoCliente}
+                disabled={excluindoCliente}
+                className="flex-1 py-2.5 px-4 bg-red-600 hover:bg-red-700 disabled:bg-red-400 text-white text-xs font-bold rounded-xl shadow-md shadow-red-600/20 transition-colors cursor-pointer flex items-center justify-center gap-1.5"
+              >
+                {excluindoCliente ? <span>Excluindo...</span> : <span>Sim, Excluir Cliente</span>}
               </button>
             </div>
           </div>

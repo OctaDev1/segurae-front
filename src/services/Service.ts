@@ -5,6 +5,19 @@ export const api = axios.create({
     baseURL: import.meta.env.VITE_API_URL || "https://segurae-1.onrender.com"
 
 });
+
+// Função utilitária para normalizar o cabeçalho de autenticação
+export const getAuthHeaders = (token?: string) => {
+  const tokenFinal = token || localStorage.getItem("token") || "";
+  if (!tokenFinal.trim()) return {};
+  const formattedToken = tokenFinal.startsWith("Bearer ") ? tokenFinal : `Bearer ${tokenFinal}`;
+  return {
+    headers: {
+      Authorization: formattedToken,
+    },
+  };
+};
+
 // Função Cadastrar Usuário
 export const cadastrarUsuario = async <T = unknown>(url: string, dados: object, setDados?: (dados: T) => void) => {
   const resposta = await api.post(url, dados);
