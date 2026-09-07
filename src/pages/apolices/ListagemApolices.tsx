@@ -18,87 +18,7 @@ import {
 import { AuthContext } from '../../contexts/AuthContext';
 import type Apolice from '../../models/Apolice';
 import { ToastAlerta } from '../../utils/toastalerta/ToastAlerta';
-
-const APOLICES_INICIAIS: Apolice[] = [
-  {
-    id: 1,
-    numeroApolice: 'SEG-2026-X892A1',
-    marcaModelo: 'Toyota Corolla Cross XRE 2.0',
-    bemSegurado: 'Automóvel Passeio',
-    anoModelo: 2024,
-    placa: 'BRA2E19',
-    renavam: '00123456789',
-    valorApolice: 3850.0,
-    tipoCobertura: 'Total 100% FIPE + Terceiros (R$ 150k)',
-    dataInicio: '2026-01-15',
-    dataTermino: '2027-01-15',
-    statusApolice: 1,
-    cliente: {
-      id: 1,
-      nomeCompleto: 'Carlos Eduardo Mendes',
-      email: 'carlos.mendes@email.com',
-      cpfCnpj: '123.456.789-00',
-      dataNascimento: '1988-04-12',
-    },
-    usuario: {
-      id: 1,
-      nome: 'Mariana Silva (Corretora)',
-      email: 'mariana.corretora@segurae.com.br',
-    },
-  },
-  {
-    id: 2,
-    numeroApolice: 'SEG-2025-F741B3',
-    marcaModelo: 'Honda Civic Touring 1.5 Turbo',
-    bemSegurado: 'Automóvel Passeio',
-    anoModelo: 2022,
-    placa: 'SEG9A88',
-    renavam: '00987654321',
-    valorApolice: 4200.0,
-    tipoCobertura: 'Compreensiva + Vidros, Faróis e Carro Reserva',
-    dataInicio: '2025-08-10',
-    dataTermino: '2026-08-10',
-    statusApolice: 1,
-    cliente: {
-      id: 1,
-      nomeCompleto: 'Carlos Eduardo Mendes',
-      email: 'carlos.mendes@email.com',
-      cpfCnpj: '123.456.789-00',
-      dataNascimento: '1988-04-12',
-    },
-    usuario: {
-      id: 2,
-      nome: 'Roberto Dias (Corretor)',
-      email: 'roberto.corretor@segurae.com.br',
-    },
-  },
-  {
-    id: 3,
-    numeroApolice: 'SEG-2024-C332D9',
-    marcaModelo: 'Jeep Renegade Longitude 1.3 Turbo',
-    bemSegurado: 'Automóvel Passeio',
-    anoModelo: 2021,
-    placa: 'RLM4C20',
-    renavam: '00543219876',
-    valorApolice: 3100.0,
-    tipoCobertura: 'Roubo, Furto e Incêndio',
-    dataInicio: '2024-02-01',
-    dataTermino: '2025-02-01',
-    statusApolice: 2,
-    cliente: {
-      id: 1,
-      nomeCompleto: 'Carlos Eduardo Mendes',
-      email: 'carlos.mendes@email.com',
-      cpfCnpj: '123.456.789-00',
-      dataNascimento: '1988-04-12',
-    },
-    usuario: {
-      id: 1,
-      nome: 'Mariana Silva (Corretora)',
-      email: 'mariana.corretora@segurae.com.br',
-    },
-  },
-];
+import { buscar } from '../../services/Service';
 
 export default function ListagemApolices() {
   const navigate = useNavigate();
@@ -118,13 +38,57 @@ export default function ListagemApolices() {
     }
   }, [isAutenticado, isCliente, navigate]);
 
-  const [apolices] = useState<Apolice[]>(APOLICES_INICIAIS);
+  // Estados
+  const [apolices, setApolices] = useState<Apolice[]>([]);
   const [busca, setBusca] = useState('');
   const [filtroStatus, setFiltroStatus] = useState<'todas' | 'ativas' | 'vencidas'>('todas');
   const [apoliceSelecionada, setApoliceSelecionada] = useState<Apolice | null>(null);
 
+  // Busca dos dados reais no Back-end com filtro exclusivo para o cliente logado
+  useEffect(() => {
+    async function carregarDados() {
+      try {
+        const tokenFinal = usuario?.token || localStorage.getItem('token') || '';
+        const tokenFormatado = tokenFinal.startsWith('Bearer ') ? tokenFinal : `Bearer ${tokenFinal}`;
+        
+        await buscar('/apolices', (dadosApi: Apolice[]) => {
+          if (Array.isArray(dadosApi)) {
+            // Filtra rigorosamente apenas as apólices do cliente logado
+            const apolicesDoCliente = dadosApi.filter((apolice) => {
+              const emailCliente = apolice.cliente?.email?.toLowerCase();
+              const emailUsuario = usuario.usuario?.toLowerCase();
+              const idCliente = apolice.cliente?.id;
+              const idUsuario = usuario.id;
+
+              return (
+                (emailCliente && emailUsuario && emailCliente === emailUsuario) ||
+                (idCliente && idUsuario && idCliente === idUsuario) ||
+                apolice.usuario?.id === idUsuario
+              );
+            });
+            setApolices(apolicesDoCliente);
+          }
+        }, {
+          headers: tokenFormatado ? { Authorization: tokenFormatado } : {}
+        });
+      } catch (error: any) {
+        if (error.response?.status === 401 || error.response?.status === 403) {
+          ToastAlerta('Sua sessão expirou. Por favor, faça login novamente.', 'info');
+          handleLogout();
+          navigate('/login');
+        } else {
+          ToastAlerta('Erro ao carregar suas apólices. Tente novamente mais tarde.', 'erro');
+        }
+      }
+    }
+
+    if (isAutenticado && isCliente) {
+      carregarDados();
+    }
+  }, [usuario, isAutenticado, isCliente, handleLogout, navigate]);
+
   const formatarMoeda = (valor: number) => {
-    return valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    return Number(valor || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
   };
 
   const formatarData = (dataStr: string) => {
@@ -138,10 +102,14 @@ export default function ListagemApolices() {
 
   const apolicesFiltradas = apolices.filter((apolice) => {
     const termo = busca.toLowerCase();
+    const marcaModelo = apolice.marcaModelo || '';
+    const placa = apolice.placa || '';
+    const numeroApolice = apolice.numeroApolice || '';
+
     const bateBusca =
-      apolice.marcaModelo.toLowerCase().includes(termo) ||
-      apolice.placa.toLowerCase().includes(termo) ||
-      (apolice.numeroApolice && apolice.numeroApolice.toLowerCase().includes(termo));
+      marcaModelo.toLowerCase().includes(termo) ||
+      placa.toLowerCase().includes(termo) ||
+      numeroApolice.toLowerCase().includes(termo);
 
     if (filtroStatus === 'ativas') {
       return bateBusca && apolice.statusApolice === 1;
@@ -159,7 +127,7 @@ export default function ListagemApolices() {
   }
 
   return (
-    <div className="min-h-screen bg-zinc-50 text-zinc-900">
+    <div className="min-h-screen bg-zinc-50 text-zinc-900 font-sans">
       <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-zinc-200 px-6 py-4 shadow-xs">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           <Link to="/" className="flex items-center gap-3">
@@ -184,8 +152,8 @@ export default function ListagemApolices() {
                 {usuario.nome ? usuario.nome.charAt(0) : 'C'}
               </div>
               <div className="text-left">
-                <p className="text-xs font-bold text-zinc-900">{usuario.nome || 'Carlos Eduardo'}</p>
-                <p className="text-[11px] text-zinc-500">{usuario.usuario || usuario.email || 'carlos.mendes@email.com'}</p>
+                <p className="text-xs font-bold text-zinc-900">{usuario.nome || 'Cliente'}</p>
+                <p className="text-[11px] text-zinc-500">{usuario.usuario || usuario.email}</p>
               </div>
             </div>
 
@@ -232,7 +200,7 @@ export default function ListagemApolices() {
             </button>
           </div>
 
-          <div className="absolute right-0 top-0 bottom-0 w-96 bg-linear-to-l from-red-600/10 to-transparent pointer-events-none" />
+          <div className="absolute right-0 top-0 bottom-0 w-96 bg-gradient-to-l from-red-600/10 to-transparent pointer-events-none" />
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
@@ -322,14 +290,14 @@ export default function ListagemApolices() {
             <Car size={48} className="mx-auto text-zinc-300 mb-3" />
             <h3 className="text-lg font-bold text-zinc-800 mb-1">Nenhuma apólice encontrada</h3>
             <p className="text-sm text-zinc-500 mb-6">
-              Não encontramos apólices com os termos ou filtros selecionados.
+              Não encontramos apólices cadastradas para o seu perfil com os termos ou filtros selecionados.
             </p>
             <button
               onClick={() => {
                 setBusca('');
                 setFiltroStatus('todas');
               }}
-              className="px-4 py-2 bg-zinc-900 text-white text-xs font-bold rounded-xl hover:bg-zinc-800 transition-colors"
+              className="px-4 py-2 bg-zinc-900 text-white text-xs font-bold rounded-xl hover:bg-zinc-800 transition-colors cursor-pointer"
             >
               Limpar filtros
             </button>
@@ -341,7 +309,7 @@ export default function ListagemApolices() {
 
               return (
                 <div
-                  key={apolice.id}
+                  key={apolice.id || apolice.numeroApolice}
                   className="bg-white rounded-3xl border border-zinc-200/90 shadow-xs hover:shadow-md transition-shadow overflow-hidden flex flex-col justify-between"
                 >
                   <div className="p-6 border-b border-zinc-100">
@@ -558,19 +526,19 @@ export default function ListagemApolices() {
                   <div className="bg-zinc-50 p-3 rounded-xl border border-zinc-100">
                     <span className="text-zinc-500 block">Segurado (Cliente)</span>
                     <span className="font-bold text-zinc-900 block">
-                      {apoliceSelecionada.cliente?.nomeCompleto}
+                      {apoliceSelecionada.cliente?.nomeCompleto || usuario.nome}
                     </span>
                     <span className="text-[11px] text-zinc-500">
-                      CPF: {apoliceSelecionada.cliente?.cpfCnpj}
+                      CPF: {apoliceSelecionada.cliente?.cpfCnpj || '---'}
                     </span>
                   </div>
                   <div className="bg-zinc-50 p-3 rounded-xl border border-zinc-100">
                     <span className="text-zinc-500 block">Corretor Responsável</span>
                     <span className="font-bold text-zinc-900 block">
-                      {apoliceSelecionada.usuario?.nome}
+                      {apoliceSelecionada.usuario?.nome || 'Corretor Seguraê'}
                     </span>
                     <span className="text-[11px] text-zinc-500">
-                      {apoliceSelecionada.usuario?.email}
+                      {apoliceSelecionada.usuario?.email || 'contato@segurae.com'}
                     </span>
                   </div>
                 </div>

@@ -1,8 +1,11 @@
-import { useContext } from "react";
+import { useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import NavBar from "../../components/navbar/NavBar";
 import Footer from "../../components/footer/Footer";
 import { AuthContext } from "../../contexts/AuthContext";
+import type Apolice from "../../models/Apolice";
+import type Cliente from "../../models/Cliente";
+import { buscar } from "../../services/Service";
 import { 
   Briefcase, 
   Users, 
@@ -15,12 +18,79 @@ import {
   Handshake
 } from "@phosphor-icons/react";
 
+const getAuthHeader = (token?: string) => {
+  const tokenFinal = token || localStorage.getItem("token") || "";
+  if (!tokenFinal) return {};
+  const tokenFormatado = tokenFinal.startsWith("Bearer ") ? tokenFinal : `Bearer ${tokenFinal}`;
+  return { headers: { Authorization: tokenFormatado } };
+};
+
 export default function DashboardCorretor() {
   const navigate = useNavigate();
   const { usuario, handleLogout } = useContext(AuthContext);
 
-  const nomeExibicao = usuario.nome || localStorage.getItem("nome") || "Corretor Parceiro";
-  const emailExibicao = usuario.usuario || localStorage.getItem("usuario") || "corretor@segurae.com";
+  const nomeExibicao = usuario?.nome || localStorage.getItem("nome") || "Corretor Parceiro";
+  const emailExibicao = usuario?.usuario || localStorage.getItem("usuario") || "corretor@segurae.com";
+
+  // Estados para dados reais do Render
+  const [apolices, setApolices] = useState<Apolice[]>([]);
+  const [clientes, setClientes] = useState<Cliente[]>([]);
+  const [carregando, setCarregando] = useState(true);
+
+  // Buscar dados da API do Render ao carregar o dashboard
+  const carregarDadosReais = useCallback(async () => {
+    setCarregando(true);
+    try {
+      const header = getAuthHeader(usuario?.token);
+      const [resApolices, resClientes] = await Promise.all([
+        buscar("/apolices", undefined, header).catch(() => []),
+        buscar("/clientes", undefined, header).catch(() => [])
+      ]);
+
+      if (Array.isArray(resApolices)) {
+        setApolices(resApolices);
+      }
+      if (Array.isArray(resClientes)) {
+        setClientes(resClientes);
+      }
+    } catch (error) {
+      console.error("Erro ao carregar dados do dashboard:", error);
+    } finally {
+      setCarregando(false);
+    }
+  }, [usuario]);
+
+  useEffect(() => {
+    carregarDadosReais();
+  }, [carregarDadosReais]);
+
+  // Cálculos dinâmicos baseados estritamente na API do Render
+  const statsReais = useMemo(() => {
+    const totalClientes = clientes.length;
+    const totalApolices = apolices.length;
+    const apolicesAtivas = apolices.filter((a) => a.statusApolice === 1).length;
+    const apolicesPendentes = apolices.filter((a) => a.statusApolice === 0).length;
+    
+    // Soma do valor das apólices ativas para a comissão/prêmio
+    const valorPrêmioTotal = apolices
+      .filter((a) => a.statusApolice === 1)
+      .reduce((acc, curr) => acc + (Number(curr.valorApolice) || 0), 0);
+
+    return {
+      totalClientes,
+      totalApolices,
+      apolicesAtivas,
+      apolicesPendentes,
+      valorPrêmioTotal
+    };
+  }, [apolices, clientes]);
+
+  const formatarMoeda = (valor: number) => {
+    return Number(valor || 0).toLocaleString("pt-BR", {
+      style: "currency",
+      currency: "BRL",
+    });
+  };
 
   return (
     <div className="w-full min-h-screen bg-zinc-50 text-zinc-900 relative flex flex-col justify-between">
@@ -38,7 +108,7 @@ export default function DashboardCorretor() {
               Bem-vindo, <span className="text-red-600">{nomeExibicao}</span>
             </h1>
             <p className="text-zinc-500 text-sm mt-1">
-              Gerencie sua carteira de segurados, acompanhe comissões e emita novas apólices.
+              Gerencie sua carteira de segurados, acompanhe comissões e emita novas apólices em tempo real.
             </p>
           </div>
 
@@ -63,7 +133,7 @@ export default function DashboardCorretor() {
           </div>
         </div>
 
-        {/* Métricas de Performance do Corretor */}
+        {/* Métricas de Performance do Corretor (Dinâmicas do Render) */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-10">
           {/* Card 1: Carteira Ativa */}
           <div className="bg-white rounded-3xl p-6 border border-zinc-200/80 shadow-xs">
@@ -76,10 +146,11 @@ export default function DashboardCorretor() {
               </div>
             </div>
             <h3 className="text-2xl font-black text-zinc-900 mb-1">
-              48 <span className="text-xs font-normal text-zinc-500">segurados</span>
+              {carregando ? "..." : statsReais.totalClientes}{" "}
+              <span className="text-xs font-normal text-zinc-500">segurados</span>
             </h3>
             <p className="text-[11px] text-emerald-600 font-semibold flex items-center gap-1">
-              <TrendUp size={14} weight="bold" /> +12% este mês
+              <TrendUp size={14} weight="bold" /> Sincronizado com API
             </p>
           </div>
 
@@ -94,10 +165,11 @@ export default function DashboardCorretor() {
               </div>
             </div>
             <h3 className="text-2xl font-black text-zinc-900 mb-1">
-              64 <span className="text-xs font-normal text-zinc-500">vigentes</span>
+              {carregando ? "..." : statsReais.apolicesAtivas}{" "}
+              <span className="text-xs font-normal text-zinc-500">vigentes</span>
             </h3>
             <p className="text-[11px] text-zinc-400 font-medium">
-              Taxa de renovação: 94%
+              Total cadastradas: {statsReais.totalApolices}
             </p>
           </div>
 
@@ -105,17 +177,17 @@ export default function DashboardCorretor() {
           <div className="bg-white rounded-3xl p-6 border border-zinc-200/80 shadow-xs">
             <div className="flex items-center justify-between mb-3">
               <span className="text-xs font-bold uppercase tracking-wider text-zinc-400">
-                Comissão Acumulada
+                Prêmio / Comissão Ativa
               </span>
               <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
                 <CurrencyCircleDollar size={18} weight="bold" />
               </div>
             </div>
-            <h3 className="text-2xl font-black text-emerald-600 mb-1">
-              R$ 18.450
+            <h3 className="text-xl lg:text-2xl font-black text-emerald-600 mb-1 truncate">
+              {carregando ? "..." : formatarMoeda(statsReais.valorPrêmioTotal)}
             </h3>
             <p className="text-[11px] text-zinc-400 font-medium">
-              Ciclo atual de repasse
+              Baseado nas apólices ativas
             </p>
           </div>
 
@@ -130,7 +202,8 @@ export default function DashboardCorretor() {
               </div>
             </div>
             <h3 className="text-2xl font-black text-amber-600 mb-1">
-              7 <span className="text-xs font-normal text-zinc-500">pendentes</span>
+              {carregando ? "..." : statsReais.apolicesPendentes}{" "}
+              <span className="text-xs font-normal text-zinc-500">pendentes</span>
             </h3>
             <p className="text-[11px] text-zinc-400 font-medium">
               Aguardando fechamento

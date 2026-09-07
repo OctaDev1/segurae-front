@@ -1,5 +1,5 @@
 import { useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ShieldCheck,
   Car,
@@ -21,124 +21,28 @@ import {
   SquaresFour,
   ArrowLeft,
   Check,
+  UserPlus,
+  Users,
 } from '@phosphor-icons/react';
 import { AuthContext } from '../../contexts/AuthContext';
 import type Apolice from '../../models/Apolice';
+import type Cliente from '../../models/Cliente';
 import { buscar, cadastrar, atualizar, deletar } from '../../services/Service';
 import { ToastAlerta } from '../../utils/toastalerta/ToastAlerta';
 
-const getAuthHeader = (token?: string) =>
-  token ? { headers: { Authorization: `Bearer ${token}` } } : {};
+const getAuthHeader = (token?: string) => {
+  const tokenFinal = token || localStorage.getItem('token') || '';
+  if (!tokenFinal) return {};
+  const tokenFormatado = tokenFinal.startsWith('Bearer ') ? tokenFinal : `Bearer ${tokenFinal}`;
+  return { headers: { Authorization: tokenFormatado } };
+};
 
-// Dados iniciais para demonstração e resiliência offline/cold-start
-const APOLICES_INICIAIS_CORRETOR: Apolice[] = [
-  {
-    id: 1,
-    numeroApolice: 'SEG-2026-X892A1',
-    marcaModelo: 'Toyota Corolla Cross XRE 2.0',
-    bemSegurado: 'Automóvel Passeio',
-    anoModelo: 2024,
-    placa: 'BRA2E19',
-    renavam: '00123456789',
-    valorApolice: 3850.0,
-    tipoCobertura: 'Total 100% FIPE + Terceiros (R$ 150k)',
-    dataInicio: '2026-01-15',
-    dataTermino: '2027-01-15',
-    statusApolice: 1,
-    cliente: {
-      id: 1,
-      nomeCompleto: 'Carlos Eduardo Mendes',
-      email: 'carlos.mendes@email.com',
-      cpfCnpj: '123.456.789-00',
-      dataNascimento: '1988-04-12',
-    },
-    usuario: {
-      id: 1,
-      nome: 'Mariana Silva (Corretora)',
-      email: 'mariana.corretora@segurae.com.br',
-    },
-  },
-  {
-    id: 2,
-    numeroApolice: 'SEG-2025-F741B3',
-    marcaModelo: 'Honda Civic Touring 1.5 Turbo',
-    bemSegurado: 'Automóvel Passeio',
-    anoModelo: 2022,
-    placa: 'SEG9A88',
-    renavam: '00987654321',
-    valorApolice: 4200.0,
-    tipoCobertura: 'Compreensiva + Vidros, Faróis e Carro Reserva',
-    dataInicio: '2025-08-10',
-    dataTermino: '2026-08-10',
-    statusApolice: 1,
-    cliente: {
-      id: 2,
-      nomeCompleto: 'Ana Beatriz Souza',
-      email: 'ana.souza@email.com',
-      cpfCnpj: '234.567.890-11',
-      dataNascimento: '1992-09-21',
-    },
-    usuario: {
-      id: 1,
-      nome: 'Mariana Silva (Corretora)',
-      email: 'mariana.corretora@segurae.com.br',
-    },
-  },
-  {
-    id: 3,
-    numeroApolice: 'SEG-2024-C332D9',
-    marcaModelo: 'Jeep Renegade Longitude 1.3 Turbo',
-    bemSegurado: 'Automóvel Passeio',
-    anoModelo: 2021,
-    placa: 'RLM4C20',
-    renavam: '00543219876',
-    valorApolice: 3100.0,
-    tipoCobertura: 'Roubo, Furto e Incêndio',
-    dataInicio: '2024-02-01',
-    dataTermino: '2025-02-01',
-    statusApolice: 2,
-    cliente: {
-      id: 3,
-      nomeCompleto: 'Rodrigo Fernandes Lima',
-      email: 'rodrigo.lima@email.com',
-      cpfCnpj: '345.678.901-22',
-      dataNascimento: '1985-11-05',
-    },
-    usuario: {
-      id: 1,
-      nome: 'Mariana Silva (Corretora)',
-      email: 'mariana.corretora@segurae.com.br',
-    },
-  },
-  {
-    id: 4,
-    numeroApolice: 'SEG-2026-P910E4',
-    marcaModelo: 'Volkswagen T-Cross Highline 250 TSI',
-    bemSegurado: 'SUV Urbano',
-    anoModelo: 2023,
-    placa: 'FTX3D82',
-    renavam: '00778899112',
-    valorApolice: 3600.0,
-    tipoCobertura: 'Total 100% FIPE + Danos Corporais e Materiais',
-    dataInicio: '2026-03-01',
-    dataTermino: '2027-03-01',
-    statusApolice: 0,
-    cliente: {
-      id: 4,
-      nomeCompleto: 'Juliana Paes Vasconcelos',
-      email: 'juliana.vasconcelos@email.com',
-      cpfCnpj: '456.789.012-33',
-      dataNascimento: '1995-07-18',
-    },
-    usuario: {
-      id: 1,
-      nome: 'Mariana Silva (Corretora)',
-      email: 'mariana.corretora@segurae.com.br',
-    },
-  },
+const PLANOS_SEGURO = [
+  { nome: 'Essencial (Roubo e Furto)', desc: '100% Tabela FIPE, Furto qualificado e Assistência 24h básica', valor: 1850, tag: 'MAIS ECONÔMICO' },
+  { nome: 'Completo (Colisão e Terceiros)', desc: 'Colisão total/parcial, danos a terceiros, guincho ilimitado e carro reserva', valor: 2950, tag: 'MAIS POPULAR' },
+  { nome: 'Premium VIP (Proteção Total)', desc: 'Proteção total sem franquia para vidros/faróis e carro reserva executivo', valor: 4250, tag: 'MÁXIMA PROTEÇÃO' },
 ];
 
-// Interface para formulário de cadastro / edição
 interface FormApoliceData {
   id?: number;
   numeroApolice: string;
@@ -152,131 +56,125 @@ interface FormApoliceData {
   dataInicio: string;
   dataTermino: string;
   statusApolice: number;
-  clienteNome: string;
-  clienteEmail: string;
-  clienteCpfCnpj: string;
-  clienteDataNasc: string;
+  clienteId: number | string;
 }
 
-const FORM_INICIAL: FormApoliceData = {
+const FORM_APOLICE_INICIAL: FormApoliceData = {
   numeroApolice: '',
   bemSegurado: 'Automóvel Passeio',
   marcaModelo: '',
   anoModelo: new Date().getFullYear(),
   placa: '',
   renavam: '',
-  valorApolice: '',
-  tipoCobertura: 'Total 100% FIPE + Terceiros (R$ 150k)',
+  valorApolice: 2950,
+  tipoCobertura: 'Completo (Colisão e Terceiros)',
   dataInicio: new Date().toISOString().split('T')[0],
   dataTermino: new Date(new Date().setFullYear(new Date().getFullYear() + 1))
     .toISOString()
     .split('T')[0],
   statusApolice: 1,
-  clienteNome: '',
-  clienteEmail: '',
-  clienteCpfCnpj: '',
-  clienteDataNasc: '1990-01-01',
+  clienteId: '',
+};
+
+interface FormClienteData {
+  nomeCompleto: string;
+  email: string;
+  cpfCnpj: string;
+  dataNascimento: string;
+}
+
+const FORM_CLIENTE_INICIAL: FormClienteData = {
+  nomeCompleto: '',
+  email: '',
+  cpfCnpj: '',
+  dataNascimento: '1990-01-01',
 };
 
 export default function AreaCorretor() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { usuario, handleLogout } = useContext(AuthContext);
+
+  const abaParam = searchParams.get('aba');
+  const [abaAtiva, setAbaAtiva] = useState<'apolices' | 'clientes'>(
+    abaParam === 'clientes' ? 'clientes' : 'apolices'
+  );
+
+  useEffect(() => {
+    setSearchParams(abaAtiva === 'clientes' ? { aba: 'clientes' } : {});
+  }, [abaAtiva, setSearchParams]);
 
   const isAutenticado = Boolean(usuario && usuario.token && usuario.token.trim() !== '');
   const isCorretor = isAutenticado && (usuario.perfil === 'ROLE_CORRETOR' || usuario.perfil === 'corretor');
 
-  // Proteção da rota do Corretor
   useEffect(() => {
     if (!isAutenticado) {
       ToastAlerta('Você precisa estar logado para acessar a Área do Corretor.', 'info');
       navigate('/login', { state: { tipoAcesso: 'corretor' }, replace: true });
     } else if (!isCorretor) {
-      ToastAlerta('Acesso negado: Seu perfil é de Cliente e não possui permissão para a Área do Corretor.', 'erro');
+      ToastAlerta('Acesso negado: Seu perfil é de Cliente.', 'erro');
       navigate('/apolices', { replace: true });
     }
   }, [isAutenticado, isCorretor, navigate]);
 
-  // Estados principais
-  const [apolices, setApolices] = useState<Apolice[]>(() => {
-    const salvas = localStorage.getItem('segurae_apolices_corretor');
-    if (salvas) {
-      try {
-        return JSON.parse(salvas);
-      } catch {
-        return APOLICES_INICIAIS_CORRETOR;
-      }
-    }
-    return APOLICES_INICIAIS_CORRETOR;
-  });
-
+  const [apolices, setApolices] = useState<Apolice[]>([]);
+  const [clientes, setClientes] = useState<Cliente[]>([]);
   const [carregando, setCarregando] = useState(false);
   const [salvando, setSalvando] = useState(false);
   const [statusApi, setStatusApi] = useState<'online' | 'offline' | 'verificando'>('verificando');
 
-  // Filtros e Visualização
   const [busca, setBusca] = useState('');
+  const [buscaCliente, setBuscaCliente] = useState('');
   const [filtroStatus, setFiltroStatus] = useState<'todas' | 'ativas' | 'vencidas' | 'pendentes'>('todas');
   const [viewMode, setViewMode] = useState<'tabela' | 'cards'>('tabela');
 
-  // Modais
   const [modalFormAberto, setModalFormAberto] = useState(false);
+  const [modalClienteAberto, setModalClienteAberto] = useState(false);
   const [modalDetalhesAberto, setModalDetalhesAberto] = useState(false);
   const [modalExcluirAberto, setModalExcluirAberto] = useState(false);
+  const [modalExcluirClienteAberto, setModalExcluirClienteAberto] = useState(false);
 
-  // Itens em edição ou inspeção
-  const [formData, setFormData] = useState<FormApoliceData>(FORM_INICIAL);
+  const [formData, setFormData] = useState<FormApoliceData>(FORM_APOLICE_INICIAL);
+  const [formCliente, setFormCliente] = useState<FormClienteData>(FORM_CLIENTE_INICIAL);
+
   const [apoliceSelecionada, setApoliceSelecionada] = useState<Apolice | null>(null);
   const [apoliceParaExcluir, setApoliceParaExcluir] = useState<Apolice | null>(null);
+  const [clienteParaExcluir, setClienteParaExcluir] = useState<Cliente | null>(null);
+
   const [erroForm, setErroForm] = useState('');
+  const [erroCliente, setErroCliente] = useState('');
 
-  // Sincronizar apólices no localStorage para persistência de sessão
-  useEffect(() => {
-    localStorage.setItem('segurae_apolices_corretor', JSON.stringify(apolices));
-  }, [apolices]);
-
-  // Carregar dados da API
-  const carregarApolicesApi = useCallback(async () => {
+  const carregarDadosApi = useCallback(async () => {
     setCarregando(true);
     try {
       const header = getAuthHeader(usuario?.token);
-      const dados = await buscar('/apolices', undefined, header);
-      if (Array.isArray(dados) && dados.length > 0) {
-        setApolices(dados);
-        setStatusApi('online');
-      } else {
-        setStatusApi('online');
+      
+      const [resApolices, resClientes] = await Promise.all([
+        buscar('/apolices', undefined, header).catch(() => []),
+        buscar('/clientes', undefined, header).catch(() => [])
+      ]);
+
+      if (Array.isArray(resApolices)) {
+        setApolices(resApolices);
       }
+      if (Array.isArray(resClientes)) {
+        setClientes(resClientes);
+      }
+      setStatusApi('online');
     } catch {
       setStatusApi('offline');
-      // Continua usando os dados do estado/localStorage sem interromper a navegação
+      ToastAlerta('Erro ao carregar dados do servidor Render.', 'erro');
     } finally {
       setCarregando(false);
     }
   }, [usuario]);
 
   useEffect(() => {
-    let ativo = true;
-    const buscarInicial = async () => {
-      try {
-        const header = getAuthHeader(usuario?.token);
-        const dados = await buscar('/apolices', undefined, header);
-        if (ativo && Array.isArray(dados) && dados.length > 0) {
-          setApolices(dados);
-          setStatusApi('online');
-        } else if (ativo) {
-          setStatusApi('online');
-        }
-      } catch {
-        if (ativo) setStatusApi('offline');
-      }
-    };
-    buscarInicial();
-    return () => {
-      ativo = false;
-    };
-  }, [usuario]);
+    if (isAutenticado && isCorretor) {
+      carregarDadosApi();
+    }
+  }, [isAutenticado, isCorretor, carregarDadosApi]);
 
-  // Formatações
   const formatarMoeda = (valor: number) => {
     return Number(valor || 0).toLocaleString('pt-BR', {
       style: 'currency',
@@ -293,7 +191,6 @@ export default function AreaCorretor() {
     return dataStr;
   };
 
-  // Estatísticas calculadas
   const stats = useMemo(() => {
     const total = apolices.length;
     const ativas = apolices.filter((a) => a.statusApolice === 1).length;
@@ -303,7 +200,14 @@ export default function AreaCorretor() {
     return { total, ativas, vencidas, pendentes, valorTotal };
   }, [apolices]);
 
-  // Filtro e busca
+  const statsClientes = useMemo(() => {
+    const total = clientes.length;
+    const clientesComApolicesIds = new Set(apolices.map((a) => a.cliente?.id).filter(Boolean));
+    const comApolices = clientes.filter((c) => c.id && clientesComApolicesIds.has(c.id)).length;
+    const semApolices = total - comApolices;
+    return { total, comApolices, semApolices };
+  }, [clientes, apolices]);
+
   const apolicesFiltradas = useMemo(() => {
     return apolices.filter((apolice) => {
       const termo = busca.toLowerCase().trim();
@@ -325,19 +229,88 @@ export default function AreaCorretor() {
     });
   }, [apolices, busca, filtroStatus]);
 
-  // Abertura do formulário para nova apólice
+  const clientesFiltrados = useMemo(() => {
+    return clientes.filter((cliente) => {
+      const termo = buscaCliente.toLowerCase().trim();
+      return (
+        !termo ||
+        cliente.nomeCompleto?.toLowerCase().includes(termo) ||
+        cliente.email?.toLowerCase().includes(termo) ||
+        cliente.cpfCnpj?.toLowerCase().includes(termo)
+      );
+    });
+  }, [clientes, buscaCliente]);
+
   const handleNovaApolice = () => {
     const codigoAleatorio = Math.random().toString(36).substring(2, 8).toUpperCase();
     const ano = new Date().getFullYear();
     setFormData({
-      ...FORM_INICIAL,
+      ...FORM_APOLICE_INICIAL,
       numeroApolice: `SEG-${ano}-${codigoAleatorio}`,
+      clienteId: clientes[0]?.id ?? '',
     });
     setErroForm('');
     setModalFormAberto(true);
   };
 
-  // Abertura do formulário para edição
+  const handleNovoCliente = () => {
+    setFormCliente(FORM_CLIENTE_INICIAL);
+    setErroCliente('');
+    setModalClienteAberto(true);
+  };
+
+  const handleSalvarCliente = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErroCliente('');
+
+    if (!formCliente.nomeCompleto.trim() || !formCliente.email.trim() || !formCliente.cpfCnpj.trim()) {
+      setErroCliente('Preencha todos os campos obrigatórios do cliente.');
+      return;
+    }
+
+    setSalvando(true);
+
+    const primeiroNome = formCliente.nomeCompleto.trim().split(' ')[0].toLowerCase();
+    const senhaGerada = `${primeiroNome}1234`;
+
+    const clientePayload = {
+      nomeCompleto: formCliente.nomeCompleto.trim(),
+      email: formCliente.email.trim(),
+      cpfCnpj: formCliente.cpfCnpj.replace(/\D/g, ''),
+      dataNascimento: formCliente.dataNascimento || '1990-01-01',
+      usuario: {
+        usuario: formCliente.email.trim(),
+        senha: senhaGerada,
+        perfil: 'ROLE_CLIENTE',
+        nome: formCliente.nomeCompleto.trim()
+      }
+    };
+
+    try {
+      if (!usuario?.token) {
+        ToastAlerta('Sessão expirada. Faça login novamente.', 'info');
+        navigate('/login');
+        return;
+      }
+
+      const header = getAuthHeader(usuario.token);
+
+      await cadastrar('/clientes/cadastrar', clientePayload, () => undefined, header);
+      
+      ToastAlerta(`Cliente cadastrado com sucesso! Senha gerada: ${senhaGerada}`, 'sucesso');
+      setModalClienteAberto(false);
+      carregarDadosApi();
+      setFormCliente(FORM_CLIENTE_INICIAL);
+    } catch (error: any) {
+      console.error('Erro ao cadastrar cliente na API:', error);
+      const mensagem = error?.response?.data?.message || 'Erro ao cadastrar cliente no servidor.';
+      ToastAlerta(mensagem, 'erro');
+      setErroCliente(mensagem);
+    } finally {
+      setSalvando(false);
+    }
+  };
+
   const handleEditarApolice = (apolice: Apolice) => {
     setFormData({
       id: apolice.id,
@@ -352,160 +325,128 @@ export default function AreaCorretor() {
       dataInicio: apolice.dataInicio || '',
       dataTermino: apolice.dataTermino || '',
       statusApolice: apolice.statusApolice ?? 1,
-      clienteNome: apolice.cliente?.nomeCompleto || apolice.usuario?.nome || '',
-      clienteEmail: apolice.cliente?.email || apolice.usuario?.email || '',
-      clienteCpfCnpj: apolice.cliente?.cpfCnpj || '',
-      clienteDataNasc: apolice.cliente?.dataNascimento || '1990-01-01',
+      clienteId: apolice.cliente?.id || '',
     });
     setErroForm('');
     setModalFormAberto(true);
   };
 
-  // Abertura do modal de visualização
   const handleVisualizarApolice = (apolice: Apolice) => {
     setApoliceSelecionada(apolice);
     setModalDetalhesAberto(true);
   };
 
-  // Abertura do modal de exclusão
   const handleExcluirClique = (apolice: Apolice) => {
     setApoliceParaExcluir(apolice);
     setModalExcluirAberto(true);
   };
 
-  // Confirmação de exclusão (DELETE)
   const handleConfirmarExclusao = async () => {
-    if (!apoliceParaExcluir) return;
+    if (!apoliceParaExcluir || !apoliceParaExcluir.id) return;
     setSalvando(true);
 
     try {
-      if (apoliceParaExcluir.id) {
-        try {
-          const header = getAuthHeader(usuario?.token);
-          await deletar(`/apolices/${apoliceParaExcluir.id}`, header);
-        } catch {
-          // Mantém integridade local mesmo se o backend estiver inacessível
-        }
-      }
+      const header = getAuthHeader(usuario?.token);
+      await deletar(`/apolices/${apoliceParaExcluir.id}`, header);
 
       setApolices((prev) => prev.filter((item) => item.id !== apoliceParaExcluir.id));
       ToastAlerta(`Apólice ${apoliceParaExcluir.numeroApolice} excluída com sucesso!`, 'sucesso');
       setModalExcluirAberto(false);
       setApoliceParaExcluir(null);
+      carregarDadosApi();
     } catch {
-      ToastAlerta('Erro ao excluir apólice.', 'erro');
+      ToastAlerta('Erro ao excluir apólice no servidor.', 'erro');
     } finally {
       setSalvando(false);
     }
   };
 
-  // Submissão do formulário (POST / PUT)
+  const handleExcluirClienteClique = (cliente: Cliente) => {
+    setClienteParaExcluir(cliente);
+    setModalExcluirClienteAberto(true);
+  };
+
+  const handleConfirmarExclusaoCliente = async () => {
+    if (!clienteParaExcluir || !clienteParaExcluir.id) return;
+    setSalvando(true);
+
+    try {
+      const header = getAuthHeader(usuario?.token);
+      await deletar(`/clientes/${clienteParaExcluir.id}`, header);
+
+      setClientes((prev) => prev.filter((item) => item.id !== clienteParaExcluir.id));
+      ToastAlerta(`Cliente ${clienteParaExcluir.nomeCompleto} excluído com sucesso!`, 'sucesso');
+      setModalExcluirClienteAberto(false);
+      setClienteParaExcluir(null);
+      carregarDadosApi();
+    } catch {
+      ToastAlerta('Erro ao excluir cliente. Verifique se ele possui apólices ativas vinculadas.', 'erro');
+    } finally {
+      setSalvando(false);
+    }
+  };
+
   const handleSalvarApolice = async (e: React.FormEvent) => {
     e.preventDefault();
     setErroForm('');
 
-    // Validações
-    if (!formData.marcaModelo.trim()) {
-      setErroForm('Por favor, informe a marca e o modelo do veículo.');
-      return;
-    }
-    if (!formData.placa.trim() || formData.placa.trim().length !== 7) {
-      setErroForm('A placa deve conter exatamente 7 caracteres (ex: BRA2E19).');
-      return;
-    }
-    if (!formData.renavam.trim() || formData.renavam.trim().length < 9) {
-      setErroForm('O Renavam deve conter entre 9 e 11 dígitos.');
-      return;
-    }
-    if (!formData.valorApolice || Number(formData.valorApolice) <= 0) {
-      setErroForm('Informe um valor de apólice válido maior que zero.');
-      return;
-    }
-    if (!formData.dataInicio || !formData.dataTermino) {
-      setErroForm('Informe as datas de início e término de vigência.');
-      return;
-    }
-    if (new Date(formData.dataTermino) < new Date(formData.dataInicio)) {
-      setErroForm('A data de término não pode ser anterior à data de início.');
-      return;
-    }
-    if (!formData.clienteNome.trim()) {
-      setErroForm('Informe o nome do cliente / segurado.');
+    if (!formData.marcaModelo.trim() || !formData.placa.trim() || !formData.clienteId) {
+      setErroForm('Preencha os campos obrigatórios e selecione o cliente.');
       return;
     }
 
     setSalvando(true);
 
-    const apolicePayload: Apolice = {
-      id: formData.id,
-      numeroApolice: formData.numeroApolice || `SEG-${new Date().getFullYear()}-${Math.floor(100000 + Math.random() * 900000)}`,
-      bemSegurado: formData.bemSegurado,
-      marcaModelo: formData.marcaModelo.trim(),
-      anoModelo: Number(formData.anoModelo) || 2024,
-      placa: formData.placa.trim().toUpperCase(),
-      renavam: formData.renavam.trim(),
-      valorApolice: Number(formData.valorApolice),
-      tipoCobertura: formData.tipoCobertura,
-      dataInicio: formData.dataInicio,
-      dataTermino: formData.dataTermino,
-      statusApolice: Number(formData.statusApolice),
-      cliente: {
-        id: formData.id ? apoliceSelecionada?.cliente?.id || formData.id : Date.now(),
-        nomeCompleto: formData.clienteNome.trim(),
-        email: formData.clienteEmail.trim() || 'cliente@segurae.com.br',
-        cpfCnpj: formData.clienteCpfCnpj.trim() || '000.000.000-00',
-        dataNascimento: formData.clienteDataNasc || '1990-01-01',
-      },
-      usuario: {
-        id: usuario.id || 1,
-        nome: usuario.nome || 'Mariana Silva (Corretora)',
-        email: usuario.usuario || 'mariana.corretora@segurae.com.br',
-        usuario: usuario.usuario || 'corretor@segurae.com.br',
-        perfil: 'ROLE_CORRETOR',
-      },
-    };
-
     try {
-      const header = getAuthHeader(usuario?.token);
+      if (!usuario?.token) {
+        ToastAlerta('Sessão expirada.', 'info');
+        navigate('/login');
+        return;
+      }
+
+      const header = getAuthHeader(usuario.token);
+
+      const apolicePayload = {
+        id: formData.id || undefined,
+        numeroApolice: formData.numeroApolice || `SEG-${new Date().getFullYear()}-${Math.floor(100000 + Math.random() * 900000)}`,
+        bemSegurado: formData.bemSegurado,
+        marcaModelo: formData.marcaModelo.trim(),
+        anoModelo: Number(formData.anoModelo),
+        placa: formData.placa.trim().toUpperCase(),
+        renavam: formData.renavam.trim(),
+        valorApolice: Number(formData.valorApolice),
+        tipoCobertura: formData.tipoCobertura,
+        dataInicio: formData.dataInicio,
+        dataTermino: formData.dataTermino,
+        statusApolice: Number(formData.statusApolice),
+        cliente: {
+          id: Number(formData.clienteId)
+        },
+        usuario: {
+          id: usuario.id
+        }
+      };
 
       if (formData.id) {
-        // EDIÇÃO (PUT)
-        try {
-          await atualizar('/apolices', apolicePayload, undefined, header);
-        } catch {
-          // Fallback resiliente
-        }
-
-        setApolices((prev) =>
-          prev.map((item) => (item.id === formData.id ? { ...item, ...apolicePayload } : item))
-        );
-        ToastAlerta('Apólice atualizada com sucesso!', 'sucesso');
+        await atualizar('/apolices', apolicePayload, () => undefined, header);
+        ToastAlerta('Apólice atualizada com sucesso na API!', 'sucesso');
       } else {
-        // CRIAÇÃO (POST)
-        let apoliceCriada = apolicePayload;
-        try {
-          const respostaApi = await cadastrar('/apolices', apolicePayload, undefined, header);
-          if (respostaApi && respostaApi.id) {
-            apoliceCriada = respostaApi;
-          }
-        } catch {
-          // Fallback resiliente com ID temporário
-          apoliceCriada = { ...apolicePayload, id: Date.now() };
-        }
-
-        setApolices((prev) => [apoliceCriada, ...prev]);
-        ToastAlerta('Nova apólice cadastrada com sucesso!', 'sucesso');
+        await cadastrar('/apolices', apolicePayload, () => undefined, header);
+        ToastAlerta('Nova apólice cadastrada com sucesso na API!', 'sucesso');
       }
 
       setModalFormAberto(false);
-    } catch {
-      ToastAlerta('Ocorreu um erro ao salvar a apólice.', 'erro');
+      carregarDadosApi();
+    } catch (error: any) {
+      console.error('Erro ao salvar apólice na API:', error);
+      const mensagem = error?.response?.data?.message || 'Ocorreu um erro ao salvar a apólice no servidor.';
+      ToastAlerta(mensagem, 'erro');
+      setErroForm(mensagem);
     } finally {
       setSalvando(false);
     }
   };
 
-  // Renderizador de Badge de Status
   const renderStatusBadge = (status: number) => {
     switch (status) {
       case 1:
@@ -539,9 +480,6 @@ export default function AreaCorretor() {
 
   return (
     <div className="min-h-screen bg-zinc-50 text-zinc-900 font-sans">
-      {/* ========================================================================= */}
-      {/* HEADER SUPERIOR EXCLUSIVO DO CORRETOR COM IDENTIDADE SEGURAÊ               */}
-      {/* ========================================================================= */}
       <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-zinc-200 shadow-xs">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5 flex items-center justify-between">
           <div className="flex items-center gap-6">
@@ -561,7 +499,6 @@ export default function AreaCorretor() {
               </div>
             </Link>
 
-            {/* Status da Conexão da API */}
             <div className="hidden md:flex items-center gap-2 pl-6 border-l border-zinc-200 text-xs">
               <span
                 className={`w-2 h-2 rounded-full ${
@@ -582,16 +519,16 @@ export default function AreaCorretor() {
               </div>
               <div className="text-left">
                 <p className="text-xs font-bold text-zinc-900">
-                  {usuario.nome || 'Mariana Silva (Corretora)'}
+                  {usuario.nome || 'Corretor'}
                 </p>
                 <p className="text-[11px] text-zinc-500">
-                  {usuario.usuario || 'corretor@segurae.com.br'}
+                  {usuario.usuario || usuario.email}
                 </p>
               </div>
             </div>
 
             <Link
-              to="/"
+              to="/dashboard/corretor"
               className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-zinc-600 hover:text-zinc-900 hover:bg-zinc-100 border border-zinc-200 transition-colors"
             >
               <ArrowLeft size={16} weight="bold" />
@@ -612,12 +549,7 @@ export default function AreaCorretor() {
         </div>
       </header>
 
-      {/* ========================================================================= */}
-      {/* CONTEÚDO PRINCIPAL                                                        */}
-      {/* ========================================================================= */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        
-        {/* Banner Hero do Corretor */}
         <div className="bg-zinc-900 rounded-3xl p-6 sm:p-8 text-white relative overflow-hidden shadow-xl mb-8 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
           <div className="relative z-10 max-w-2xl">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-red-500/20 text-red-400 text-xs font-bold mb-3 border border-red-500/30">
@@ -634,7 +566,7 @@ export default function AreaCorretor() {
 
           <div className="relative z-10 flex flex-wrap items-center gap-3 shrink-0">
             <button
-              onClick={carregarApolicesApi}
+              onClick={carregarDadosApi}
               disabled={carregando}
               className="px-4 py-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-bold rounded-2xl flex items-center gap-2 border border-zinc-700 transition-all cursor-pointer disabled:opacity-50"
             >
@@ -655,432 +587,497 @@ export default function AreaCorretor() {
             </button>
           </div>
 
-          {/* Gradiente decorativo de fundo */}
           <div className="absolute right-0 top-0 bottom-0 w-96 bg-gradient-to-l from-red-600/15 to-transparent pointer-events-none" />
         </div>
 
-        {/* ========================================================================= */}
-        {/* CARDS DE MÉTRICAS (KPIS)                                                  */}
-        {/* ========================================================================= */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-          <div className="bg-white p-5 rounded-2xl border border-zinc-200/80 shadow-xs flex items-center gap-4">
-            <div className="w-12 h-12 rounded-xl bg-zinc-100 text-zinc-800 flex items-center justify-center shrink-0">
-              <FileText size={24} weight="fill" />
-            </div>
-            <div>
-              <p className="text-xs text-zinc-500 font-medium">Total de Apólices</p>
-              <p className="text-2xl font-black text-zinc-900">{stats.total}</p>
-            </div>
+        {/* BARRA DE ABAS (APÓLICES / GESTÃO DE CLIENTES) */}
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6 border-b border-zinc-200 pb-4">
+          <div className="flex items-center gap-2 bg-zinc-200/70 p-1.5 rounded-2xl">
+            <button
+              onClick={() => setAbaAtiva('apolices')}
+              className={`px-5 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2 transition-all cursor-pointer ${
+                abaAtiva === 'apolices'
+                  ? 'bg-white text-zinc-900 shadow-sm'
+                  : 'text-zinc-600 hover:text-zinc-900'
+              }`}
+            >
+              <FileText size={18} weight={abaAtiva === 'apolices' ? 'fill' : 'bold'} />
+              <span>Apólices de Seguros</span>
+              <span className={`px-2 py-0.5 rounded-full text-[10px] ${abaAtiva === 'apolices' ? 'bg-zinc-900 text-white' : 'bg-zinc-300 text-zinc-700'}`}>
+                {apolices.length}
+              </span>
+            </button>
+
+            <button
+              onClick={() => setAbaAtiva('clientes')}
+              className={`px-5 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2 transition-all cursor-pointer ${
+                abaAtiva === 'clientes'
+                  ? 'bg-red-600 text-white shadow-md shadow-red-600/20'
+                  : 'text-zinc-600 hover:text-zinc-900'
+              }`}
+            >
+              <Users size={18} weight={abaAtiva === 'clientes' ? 'fill' : 'bold'} />
+              <span>Gestão de Clientes</span>
+              <span className={`px-2 py-0.5 rounded-full text-[10px] ${abaAtiva === 'clientes' ? 'bg-white text-red-600' : 'bg-zinc-300 text-zinc-700'}`}>
+                {clientes.length}
+              </span>
+            </button>
           </div>
 
-          <div className="bg-white p-5 rounded-2xl border border-zinc-200/80 shadow-xs flex items-center gap-4">
-            <div className="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
-              <ShieldCheck size={24} weight="fill" />
-            </div>
-            <div>
-              <p className="text-xs text-zinc-500 font-medium">Apólices Ativas</p>
-              <p className="text-2xl font-black text-emerald-600">{stats.ativas}</p>
-            </div>
-          </div>
-
-          <div className="bg-white p-5 rounded-2xl border border-zinc-200/80 shadow-xs flex items-center gap-4">
-            <div className="w-12 h-12 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
-              <WarningCircle size={24} weight="fill" />
-            </div>
-            <div>
-              <p className="text-xs text-zinc-500 font-medium">Vencidas / Pendentes</p>
-              <p className="text-2xl font-black text-amber-600">
-                {stats.vencidas + stats.pendentes}
-              </p>
-            </div>
-          </div>
-
-          <div className="bg-white p-5 rounded-2xl border border-zinc-200/80 shadow-xs flex items-center gap-4">
-            <div className="w-12 h-12 rounded-xl bg-red-50 text-red-600 flex items-center justify-center shrink-0">
-              <CurrencyDollar size={24} weight="bold" />
-            </div>
-            <div>
-              <p className="text-xs text-zinc-500 font-medium">Prêmio Segurado</p>
-              <p className="text-lg sm:text-xl font-black text-red-600 truncate">
-                {formatarMoeda(stats.valorTotal)}
-              </p>
-            </div>
-          </div>
+          <p className="text-xs text-zinc-500 font-medium">
+            {abaAtiva === 'apolices' ? 'Consulte e gerencie todos os seguros ativos.' : 'Consulte a base de segurados e realize exclusões na API'}
+          </p>
         </div>
 
-        {/* ========================================================================= */}
-        {/* BARRA DE FERRAMENTAS, BUSCA E FILTROS                                     */}
-        {/* ========================================================================= */}
-        <div className="bg-white p-4 rounded-2xl border border-zinc-200/80 shadow-xs mb-6 flex flex-col lg:flex-row items-center justify-between gap-4">
-          
-          {/* Campo de Busca */}
-          <div className="relative w-full lg:w-96">
-            <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-400">
-              <MagnifyingGlass size={18} />
-            </span>
-            <input
-              type="text"
-              value={busca}
-              onChange={(e) => setBusca(e.target.value)}
-              placeholder="Buscar por placa, modelo, cliente ou apólice..."
-              className="w-full pl-10 pr-4 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl text-xs sm:text-sm text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-red-600 focus:bg-white transition-all"
-            />
-            {busca && (
-              <button
-                onClick={() => setBusca('')}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600 text-xs"
-              >
-                Limpar
-              </button>
-            )}
-          </div>
-
-          {/* Filtros de Status e Alternador de Visão */}
-          <div className="flex flex-wrap items-center justify-between w-full lg:w-auto gap-3">
-            
-            {/* Tabs de Status */}
-            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0">
-              <button
-                onClick={() => setFiltroStatus('todas')}
-                className={`px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                  filtroStatus === 'todas'
-                    ? 'bg-zinc-900 text-white'
-                    : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'
-                }`}
-              >
-                Todas ({apolices.length})
-              </button>
-
-              <button
-                onClick={() => setFiltroStatus('ativas')}
-                className={`px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                  filtroStatus === 'ativas'
-                    ? 'bg-emerald-600 text-white'
-                    : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'
-                }`}
-              >
-                Ativas ({stats.ativas})
-              </button>
-
-              <button
-                onClick={() => setFiltroStatus('vencidas')}
-                className={`px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                  filtroStatus === 'vencidas'
-                    ? 'bg-amber-600 text-white'
-                    : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'
-                }`}
-              >
-                Vencidas ({stats.vencidas})
-              </button>
-
-              <button
-                onClick={() => setFiltroStatus('pendentes')}
-                className={`px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                  filtroStatus === 'pendentes'
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'
-                }`}
-              >
-                Pendentes ({stats.pendentes})
-              </button>
-            </div>
-
-            {/* Alternador Tabela / Cards */}
-            <div className="flex items-center bg-zinc-100 p-1 rounded-xl border border-zinc-200/60">
-              <button
-                onClick={() => setViewMode('tabela')}
-                className={`p-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
-                  viewMode === 'tabela'
-                    ? 'bg-white text-zinc-900 shadow-xs'
-                    : 'text-zinc-500 hover:text-zinc-900'
-                }`}
-                title="Visualização em Tabela"
-              >
-                <Table size={16} weight="bold" />
-                <span className="hidden sm:inline">Tabela</span>
-              </button>
-
-              <button
-                onClick={() => setViewMode('cards')}
-                className={`p-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
-                  viewMode === 'cards'
-                    ? 'bg-white text-zinc-900 shadow-xs'
-                    : 'text-zinc-500 hover:text-zinc-900'
-                }`}
-                title="Visualização em Cards"
-              >
-                <SquaresFour size={16} weight="bold" />
-                <span className="hidden sm:inline">Cards</span>
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* ========================================================================= */}
-        {/* LISTAGEM DE APÓLICES: TABELA OU CARDS                                     */}
-        {/* ========================================================================= */}
-        {carregando ? (
-          <div className="bg-white rounded-3xl border border-zinc-200 p-12 text-center my-6 flex flex-col items-center justify-center">
-            <div className="w-10 h-10 border-4 border-red-600 border-t-transparent rounded-full animate-spin mb-4" />
-            <p className="text-zinc-600 font-semibold text-sm">Carregando apólices da base de dados...</p>
-          </div>
-        ) : apolicesFiltradas.length === 0 ? (
-          <div className="bg-white rounded-3xl border border-dashed border-zinc-300 p-12 text-center my-6">
-            <Car size={48} className="mx-auto text-zinc-300 mb-3" />
-            <h3 className="text-lg font-bold text-zinc-800 mb-1">Nenhuma apólice encontrada</h3>
-            <p className="text-sm text-zinc-500 mb-6">
-              Nenhuma apólice corresponde aos filtros ou termos de pesquisa aplicados.
-            </p>
-            <div className="flex items-center justify-center gap-3">
-              <button
-                onClick={() => {
-                  setBusca('');
-                  setFiltroStatus('todas');
-                }}
-                className="px-4 py-2 bg-zinc-100 hover:bg-zinc-200 text-zinc-800 text-xs font-bold rounded-xl transition-colors cursor-pointer"
-              >
-                Limpar Filtros
-              </button>
-              <button
-                onClick={handleNovaApolice}
-                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-xl transition-colors cursor-pointer"
-              >
-                Cadastrar Nova Apólice
-              </button>
-            </div>
-          </div>
-        ) : viewMode === 'tabela' ? (
-          // VISUALIZAÇÃO EM TABELA CORPORATIVA RESPONSIVA
-          <div className="bg-white rounded-3xl border border-zinc-200/90 shadow-xs overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs text-zinc-600">
-                <thead className="bg-zinc-100/70 border-b border-zinc-200/80 text-[11px] font-bold text-zinc-500 uppercase tracking-wider">
-                  <tr>
-                    <th className="py-3.5 px-4">Nº Apólice</th>
-                    <th className="py-3.5 px-4">Cliente / Segurado</th>
-                    <th className="py-3.5 px-4">Veículo & Placa</th>
-                    <th className="py-3.5 px-4">Cobertura</th>
-                    <th className="py-3.5 px-4">Valor</th>
-                    <th className="py-3.5 px-4">Vigência</th>
-                    <th className="py-3.5 px-4">Status</th>
-                    <th className="py-3.5 px-4 text-right">Ações</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-zinc-100">
-                  {apolicesFiltradas.map((apolice) => (
-                    <tr
-                      key={apolice.id || apolice.numeroApolice}
-                      className="hover:bg-zinc-50/80 transition-colors"
-                    >
-                      {/* Número da Apólice */}
-                      <td className="py-4 px-4 font-mono font-bold text-zinc-900">
-                        {apolice.numeroApolice}
-                      </td>
-
-                      {/* Cliente */}
-                      <td className="py-4 px-4">
-                        <div className="font-semibold text-zinc-900">
-                          {apolice.cliente?.nomeCompleto || apolice.usuario?.nome || 'Não informado'}
-                        </div>
-                        <div className="text-[11px] text-zinc-400">
-                          CPF: {apolice.cliente?.cpfCnpj || '---'}
-                        </div>
-                      </td>
-
-                      {/* Veículo & Placa */}
-                      <td className="py-4 px-4">
-                        <div className="font-semibold text-zinc-900">
-                          {apolice.marcaModelo}
-                        </div>
-                        <div className="flex items-center gap-2 mt-0.5">
-                          <span className="font-mono font-bold bg-zinc-900 text-white px-1.5 py-0.5 rounded text-[10px] tracking-wider">
-                            {apolice.placa}
-                          </span>
-                          <span className="text-[11px] text-zinc-400">
-                            Ano: {apolice.anoModelo}
-                          </span>
-                        </div>
-                      </td>
-
-                      {/* Tipo de Cobertura */}
-                      <td className="py-4 px-4 max-w-xs">
-                        <span className="truncate block font-medium text-zinc-700" title={apolice.tipoCobertura}>
-                          {apolice.tipoCobertura}
-                        </span>
-                        <span className="text-[10px] text-zinc-400">
-                          {apolice.bemSegurado}
-                        </span>
-                      </td>
-
-                      {/* Valor */}
-                      <td className="py-4 px-4 font-bold text-red-600 whitespace-nowrap">
-                        {formatarMoeda(apolice.valorApolice)}
-                      </td>
-
-                      {/* Vigência */}
-                      <td className="py-4 px-4 whitespace-nowrap">
-                        <div className="text-zinc-900 font-medium">
-                          {formatarData(apolice.dataInicio)}
-                        </div>
-                        <div className="text-[11px] text-zinc-400">
-                          até {formatarData(apolice.dataTermino)}
-                        </div>
-                      </td>
-
-                      {/* Status */}
-                      <td className="py-4 px-4 whitespace-nowrap">
-                        {renderStatusBadge(apolice.statusApolice)}
-                      </td>
-
-                      {/* Ações */}
-                      <td className="py-4 px-4 text-right whitespace-nowrap">
-                        <div className="inline-flex items-center gap-1">
-                          <button
-                            onClick={() => handleVisualizarApolice(apolice)}
-                            className="p-2 rounded-xl text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100 transition-colors cursor-pointer"
-                            title="Visualizar Detalhes"
-                          >
-                            <Eye size={16} weight="bold" />
-                          </button>
-                          <button
-                            onClick={() => handleEditarApolice(apolice)}
-                            className="p-2 rounded-xl text-zinc-500 hover:text-blue-600 hover:bg-blue-50 transition-colors cursor-pointer"
-                            title="Editar Apólice"
-                          >
-                            <PencilSimple size={16} weight="bold" />
-                          </button>
-                          <button
-                            onClick={() => handleExcluirClique(apolice)}
-                            className="p-2 rounded-xl text-zinc-500 hover:text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
-                            title="Excluir Apólice"
-                          >
-                            <Trash size={16} weight="bold" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        ) : (
-          // VISUALIZAÇÃO EM CARDS
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {apolicesFiltradas.map((apolice) => (
-              <div
-                key={apolice.id || apolice.numeroApolice}
-                className="bg-white rounded-3xl border border-zinc-200/90 shadow-xs hover:shadow-md transition-all overflow-hidden flex flex-col justify-between"
-              >
-                <div className="p-6 border-b border-zinc-100">
-                  <div className="flex items-start justify-between gap-3 mb-3">
-                    <div>
-                      <span className="inline-block px-2.5 py-0.5 bg-zinc-900 text-white font-mono font-bold text-xs rounded-md tracking-wider mb-1.5">
-                        {apolice.placa}
-                      </span>
-                      <h3 className="text-base font-bold text-zinc-900 leading-tight">
-                        {apolice.marcaModelo}
-                      </h3>
-                      <p className="text-xs text-zinc-400">
-                        {apolice.bemSegurado} • Ano {apolice.anoModelo}
-                      </p>
-                    </div>
-
-                    <div>{renderStatusBadge(apolice.statusApolice)}</div>
-                  </div>
-
-                  <div className="bg-zinc-50 p-3 rounded-2xl border border-zinc-100/80 space-y-1 mt-3">
-                    <div className="flex justify-between items-center text-xs">
-                      <span className="text-zinc-500">Nº da Apólice:</span>
-                      <span className="font-mono font-bold text-zinc-800">
-                        {apolice.numeroApolice}
-                      </span>
-                    </div>
-                    <div className="flex justify-between items-center text-xs">
-                      <span className="text-zinc-500">Cliente:</span>
-                      <span className="font-bold text-zinc-900 truncate max-w-42.5">
-                        {apolice.cliente?.nomeCompleto || apolice.usuario?.nome}
-                      </span>
-                    </div>
-                    <div className="flex justify-between items-center text-xs pt-1 border-t border-zinc-200/60">
-                      <span className="text-zinc-500">Valor do Seguro:</span>
-                      <span className="font-black text-red-600 text-sm">
-                        {formatarMoeda(apolice.valorApolice)}
-                      </span>
-                    </div>
-                  </div>
+        {/* CONTEÚDO DA ABA: APÓLICES */}
+        {abaAtiva === 'apolices' && (
+          <>
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+              <div className="bg-white p-5 rounded-2xl border border-zinc-200/80 shadow-xs flex items-center gap-4">
+                <div className="w-12 h-12 rounded-xl bg-zinc-100 text-zinc-800 flex items-center justify-center shrink-0">
+                  <FileText size={24} weight="fill" />
                 </div>
-
-                <div className="p-6 space-y-3 text-xs">
-                  <div>
-                    <span className="text-zinc-400 block mb-0.5 text-[11px] font-semibold uppercase">
-                      Cobertura Contratada
-                    </span>
-                    <p className="font-medium text-zinc-800 line-clamp-2">
-                      {apolice.tipoCobertura}
-                    </p>
-                  </div>
-
-                  <div className="flex justify-between items-center text-zinc-500 pt-1">
-                    <span>Vigência:</span>
-                    <span className="font-semibold text-zinc-900">
-                      {formatarData(apolice.dataInicio)} até {formatarData(apolice.dataTermino)}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="p-4 bg-zinc-50/70 border-t border-zinc-100 flex items-center justify-between gap-2">
-                  <button
-                    onClick={() => handleVisualizarApolice(apolice)}
-                    className="flex-1 py-2 px-3 bg-white hover:bg-zinc-100 text-zinc-800 font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 border border-zinc-200 transition-colors cursor-pointer"
-                  >
-                    <Eye size={16} weight="bold" />
-                    <span>Detalhes</span>
-                  </button>
-
-                  <button
-                    onClick={() => handleEditarApolice(apolice)}
-                    className="p-2 bg-white hover:bg-blue-50 text-blue-600 font-bold rounded-xl text-xs border border-zinc-200 transition-colors cursor-pointer"
-                    title="Editar Apólice"
-                  >
-                    <PencilSimple size={16} weight="bold" />
-                  </button>
-
-                  <button
-                    onClick={() => handleExcluirClique(apolice)}
-                    className="p-2 bg-white hover:bg-red-50 text-red-600 font-bold rounded-xl text-xs border border-zinc-200 transition-colors cursor-pointer"
-                    title="Excluir Apólice"
-                  >
-                    <Trash size={16} weight="bold" />
-                  </button>
+                <div>
+                  <p className="text-xs text-zinc-500 font-medium">Total de Apólices</p>
+                  <p className="text-2xl font-black text-zinc-900">{stats.total}</p>
                 </div>
               </div>
-            ))}
-          </div>
-        )}
-      </main>
 
-      {/* ========================================================================= */}
-      {/* MODAL 1: FORMULÁRIO DE CADASTRO E EDIÇÃO                                  */}
-      {/* ========================================================================= */}
-      {modalFormAberto && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white rounded-3xl max-w-3xl w-full shadow-2xl overflow-hidden border border-zinc-200 animate-in fade-in zoom-in-95 duration-200 my-8">
-            
-            {/* Header do Modal */}
-            <div className="bg-zinc-900 text-white p-6 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-red-600/25 text-red-500 flex items-center justify-center">
+              <div className="bg-white p-5 rounded-2xl border border-zinc-200/80 shadow-xs flex items-center gap-4">
+                <div className="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
                   <ShieldCheck size={24} weight="fill" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-lg leading-tight">
+                  <p className="text-xs text-zinc-500 font-medium">Apólices Ativas</p>
+                  <p className="text-2xl font-black text-emerald-600">{stats.ativas}</p>
+                </div>
+              </div>
+
+              <div className="bg-white p-5 rounded-2xl border border-zinc-200/80 shadow-xs flex items-center gap-4">
+                <div className="w-12 h-12 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
+                  <WarningCircle size={24} weight="fill" />
+                </div>
+                <div>
+                  <p className="text-xs text-zinc-500 font-medium">Vencidas / Pendentes</p>
+                  <p className="text-2xl font-black text-amber-600">
+                    {stats.vencidas + stats.pendentes}
+                  </p>
+                </div>
+              </div>
+
+              <div className="bg-white p-5 rounded-2xl border border-zinc-200/80 shadow-xs flex items-center gap-4">
+                <div className="w-12 h-12 rounded-xl bg-red-50 text-red-600 flex items-center justify-center shrink-0">
+                  <CurrencyDollar size={24} weight="bold" />
+                </div>
+                <div>
+                  <p className="text-xs text-zinc-500 font-medium">Prêmio Segurado</p>
+                  <p className="text-lg sm:text-xl font-black text-red-600 truncate">
+                    {formatarMoeda(stats.valorTotal)}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-white p-4 rounded-2xl border border-zinc-200/80 shadow-xs mb-6 flex flex-col lg:flex-row items-center justify-between gap-4">
+              <div className="relative w-full lg:w-96">
+                <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-400">
+                  <MagnifyingGlass size={18} />
+                </span>
+                <input
+                  type="text"
+                  value={busca}
+                  onChange={(e) => setBusca(e.target.value)}
+                  placeholder="Buscar por placa, modelo, cliente ou apólice..."
+                  className="w-full pl-10 pr-4 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl text-xs sm:text-sm text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-red-600 focus:bg-white transition-all"
+                />
+              </div>
+
+              <div className="flex flex-wrap items-center justify-between w-full lg:w-auto gap-3">
+                <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0">
+                  <button
+                    onClick={() => setFiltroStatus('todas')}
+                    className={`px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                      filtroStatus === 'todas'
+                        ? 'bg-zinc-900 text-white'
+                        : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'
+                    }`}
+                  >
+                    Todas ({apolices.length})
+                  </button>
+
+                  <button
+                    onClick={() => setFiltroStatus('ativas')}
+                    className={`px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                      filtroStatus === 'ativas'
+                        ? 'bg-emerald-600 text-white'
+                        : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'
+                    }`}
+                  >
+                    Ativas ({stats.ativas})
+                  </button>
+
+                  <button
+                    onClick={() => setFiltroStatus('vencidas')}
+                    className={`px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                      filtroStatus === 'vencidas'
+                        ? 'bg-amber-600 text-white'
+                        : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'
+                    }`}
+                  >
+                    Vencidas ({stats.vencidas})
+                  </button>
+
+                  <button
+                    onClick={() => setFiltroStatus('pendentes')}
+                    className={`px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                      filtroStatus === 'pendentes'
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'
+                    }`}
+                  >
+                    Pendentes ({stats.pendentes})
+                  </button>
+                </div>
+
+                <div className="flex items-center bg-zinc-100 p-1 rounded-xl border border-zinc-200/60">
+                  <button
+                    onClick={() => setViewMode('tabela')}
+                    className={`p-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+                      viewMode === 'tabela'
+                        ? 'bg-white text-zinc-900 shadow-xs'
+                        : 'text-zinc-500 hover:text-zinc-900'
+                    }`}
+                  >
+                    <Table size={16} weight="bold" />
+                    <span className="hidden sm:inline">Tabela</span>
+                  </button>
+
+                  <button
+                    onClick={() => setViewMode('cards')}
+                    className={`p-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+                      viewMode === 'cards'
+                        ? 'bg-white text-zinc-900 shadow-xs'
+                        : 'text-zinc-500 hover:text-zinc-900'
+                    }`}
+                  >
+                    <SquaresFour size={16} weight="bold" />
+                    <span className="hidden sm:inline">Cards</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {carregando ? (
+              <div className="bg-white rounded-3xl border border-zinc-200 p-12 text-center my-6 flex flex-col items-center justify-center">
+                <div className="w-10 h-10 border-4 border-red-600 border-t-transparent rounded-full animate-spin mb-4" />
+                <p className="text-zinc-600 font-semibold text-sm">Carregando dados da API do Render...</p>
+              </div>
+            ) : apolicesFiltradas.length === 0 ? (
+              <div className="bg-white rounded-3xl border border-dashed border-zinc-300 p-12 text-center my-6">
+                <Car size={48} className="mx-auto text-zinc-300 mb-3" />
+                <h3 className="text-lg font-bold text-zinc-800 mb-1">Nenhuma apólice encontrada</h3>
+                <p className="text-sm text-zinc-500 mb-6">Nenhuma apólice cadastrada na API corresponde aos filtros aplicados.</p>
+                <button
+                  onClick={handleNovaApolice}
+                  className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-xl transition-colors cursor-pointer"
+                >
+                  Cadastrar Nova Apólice
+                </button>
+              </div>
+            ) : viewMode === 'tabela' ? (
+              <div className="bg-white rounded-3xl border border-zinc-200/90 shadow-xs overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs text-zinc-600">
+                    <thead className="bg-zinc-100/70 border-b border-zinc-200/80 text-[11px] font-bold text-zinc-500 uppercase tracking-wider">
+                      <tr>
+                        <th className="py-3.5 px-4">Nº Apólice</th>
+                        <th className="py-3.5 px-4">Cliente / Segurado</th>
+                        <th className="py-3.5 px-4">Veículo & Placa</th>
+                        <th className="py-3.5 px-4">Cobertura</th>
+                        <th className="py-3.5 px-4">Valor</th>
+                        <th className="py-3.5 px-4">Vigência</th>
+                        <th className="py-3.5 px-4">Status</th>
+                        <th className="py-3.5 px-4 text-right">Ações</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-zinc-100">
+                      {apolicesFiltradas.map((apolice) => (
+                        <tr key={apolice.id || apolice.numeroApolice} className="hover:bg-zinc-50/80 transition-colors">
+                          <td className="py-4 px-4 font-mono font-bold text-zinc-900">{apolice.numeroApolice}</td>
+                          <td className="py-4 px-4">
+                            <div className="font-semibold text-zinc-900">{apolice.cliente?.nomeCompleto || 'Não informado'}</div>
+                            <div className="text-[11px] text-zinc-400">CPF: {apolice.cliente?.cpfCnpj || '---'}</div>
+                          </td>
+                          <td className="py-4 px-4">
+                            <div className="font-semibold text-zinc-900">{apolice.marcaModelo}</div>
+                            <div className="flex items-center gap-2 mt-0.5">
+                              <span className="font-mono font-bold bg-zinc-900 text-white px-1.5 py-0.5 rounded text-[10px] tracking-wider">{apolice.placa}</span>
+                              <span className="text-[11px] text-zinc-400">Ano: {apolice.anoModelo}</span>
+                            </div>
+                          </td>
+                          <td className="py-4 px-4 max-w-xs">
+                            <span className="truncate block font-medium text-zinc-700">{apolice.tipoCobertura}</span>
+                            <span className="text-[10px] text-zinc-400">{apolice.bemSegurado}</span>
+                          </td>
+                          <td className="py-4 px-4 font-bold text-red-600 whitespace-nowrap">{formatarMoeda(apolice.valorApolice)}</td>
+                          <td className="py-4 px-4 whitespace-nowrap">
+                            <div className="text-zinc-900 font-medium">{formatarData(apolice.dataInicio)}</div>
+                            <div className="text-[11px] text-zinc-400">até {formatarData(apolice.dataTermino)}</div>
+                          </td>
+                          <td className="py-4 px-4 whitespace-nowrap">{renderStatusBadge(apolice.statusApolice)}</td>
+                          <td className="py-4 px-4 text-right whitespace-nowrap">
+                            <div className="inline-flex items-center gap-1">
+                              <button onClick={() => handleVisualizarApolice(apolice)} className="p-2 rounded-xl text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100 cursor-pointer" title="Visualizar"><Eye size={16} weight="bold" /></button>
+                              <button onClick={() => handleEditarApolice(apolice)} className="p-2 rounded-xl text-zinc-500 hover:text-blue-600 hover:bg-blue-50 cursor-pointer" title="Editar"><PencilSimple size={16} weight="bold" /></button>
+                              <button onClick={() => handleExcluirClique(apolice)} className="p-2 rounded-xl text-zinc-500 hover:text-red-600 hover:bg-red-50 cursor-pointer" title="Excluir"><Trash size={16} weight="bold" /></button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {apolicesFiltradas.map((apolice) => (
+                  <div key={apolice.id || apolice.numeroApolice} className="bg-white rounded-3xl border border-zinc-200 shadow-xs p-6 flex flex-col justify-between">
+                    <div>
+                      <div className="flex justify-between items-start mb-3">
+                        <span className="px-2.5 py-0.5 bg-zinc-900 text-white font-mono font-bold text-xs rounded-md">{apolice.placa}</span>
+                        {renderStatusBadge(apolice.statusApolice)}
+                      </div>
+                      <h3 className="text-base font-bold text-zinc-900">{apolice.marcaModelo}</h3>
+                      <p className="text-xs text-zinc-400 mb-4">{apolice.bemSegurado} • Ano {apolice.anoModelo}</p>
+                      <div className="bg-zinc-50 p-3 rounded-2xl text-xs space-y-1">
+                        <div className="flex justify-between"><span className="text-zinc-500">Apólice:</span><span className="font-mono font-bold">{apolice.numeroApolice}</span></div>
+                        <div className="flex justify-between"><span className="text-zinc-500">Cliente:</span><span className="font-bold truncate max-w-40">{apolice.cliente?.nomeCompleto}</span></div>
+                        <div className="flex justify-between pt-1 border-t"><span className="text-zinc-500">Valor:</span><span className="font-black text-red-600">{formatarMoeda(apolice.valorApolice)}</span></div>
+                      </div>
+                    </div>
+                    <div className="pt-4 flex items-center justify-between gap-2 mt-4 border-t">
+                      <button onClick={() => handleVisualizarApolice(apolice)} className="flex-1 py-2 bg-zinc-100 hover:bg-zinc-200 text-zinc-800 font-bold rounded-xl text-xs flex items-center justify-center gap-1"><Eye size={16} /><span>Detalhes</span></button>
+                      <button onClick={() => handleEditarApolice(apolice)} className="p-2 bg-blue-50 text-blue-600 rounded-xl"><PencilSimple size={16} /></button>
+                      <button onClick={() => handleExcluirClique(apolice)} className="p-2 bg-red-50 text-red-600 rounded-xl"><Trash size={16} /></button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
+        )}
+
+        {/* CONTEÚDO DA ABA: GESTÃO DE CLIENTES */}
+        {abaAtiva === 'clientes' && (
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+              <div className="bg-white p-5 rounded-2xl border border-zinc-200 shadow-xs flex items-center gap-4">
+                <div className="w-12 h-12 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+                  <Users size={24} weight="fill" />
+                </div>
+                <div>
+                  <p className="text-xs text-zinc-500 font-medium">Total de Clientes</p>
+                  <p className="text-2xl font-black text-zinc-900">{statsClientes.total}</p>
+                </div>
+              </div>
+
+              <div className="bg-white p-5 rounded-2xl border border-zinc-200 shadow-xs flex items-center gap-4">
+                <div className="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+                  <ShieldCheck size={24} weight="fill" />
+                </div>
+                <div>
+                  <p className="text-xs text-zinc-500 font-medium">Clientes com Apólices</p>
+                  <p className="text-2xl font-black text-emerald-600">{statsClientes.comApolices}</p>
+                </div>
+              </div>
+
+              <div className="bg-white p-5 rounded-2xl border border-zinc-200 shadow-xs flex items-center gap-4">
+                <div className="w-12 h-12 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
+                  <Clock size={24} weight="fill" />
+                </div>
+                <div>
+                  <p className="text-xs text-zinc-500 font-medium">Sem Apólices Ativas</p>
+                  <p className="text-2xl font-black text-amber-600">{statsClientes.semApolices}</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-white p-4 rounded-2xl border border-zinc-200 shadow-xs mb-6 flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div className="relative w-full sm:w-96">
+                <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-400">
+                  <MagnifyingGlass size={18} />
+                </span>
+                <input
+                  type="text"
+                  value={buscaCliente}
+                  onChange={(e) => setBuscaCliente(e.target.value)}
+                  placeholder="Buscar por nome, e-mail ou CPF..."
+                  className="w-full pl-10 pr-4 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl text-xs sm:text-sm text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-red-600 focus:bg-white transition-all"
+                />
+              </div>
+
+              <div className="flex items-center justify-between w-full sm:w-auto gap-3">
+                <span className="text-xs text-zinc-500 font-medium">Exibindo {clientesFiltrados.length} de {clientes.length} cadastrados</span>
+                <button
+                  onClick={handleNovoCliente}
+                  className="px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl text-xs flex items-center gap-2 shadow-md shadow-red-600/20 cursor-pointer transition-all"
+                >
+                  <Plus size={16} weight="bold" />
+                  <span>+ Novo Cliente</span>
+                </button>
+              </div>
+            </div>
+
+            {carregando ? (
+              <div className="bg-white rounded-3xl border border-zinc-200 p-12 text-center my-6 flex flex-col items-center justify-center">
+                <div className="w-10 h-10 border-4 border-red-600 border-t-transparent rounded-full animate-spin mb-4" />
+                <p className="text-zinc-600 font-semibold text-sm">Carregando clientes da API...</p>
+              </div>
+            ) : clientesFiltrados.length === 0 ? (
+              <div className="bg-white rounded-3xl border border-dashed border-zinc-300 p-12 text-center my-6">
+                <Users size={48} className="mx-auto text-zinc-300 mb-3" />
+                <h3 className="text-lg font-bold text-zinc-800 mb-1">Nenhum cliente encontrado</h3>
+                <p className="text-sm text-zinc-500 mb-6">Nenhum cliente cadastrado corresponde à busca realizada.</p>
+                <button onClick={handleNovoCliente} className="px-4 py-2 bg-red-600 text-white text-xs font-bold rounded-xl">Cadastrar Novo Cliente</button>
+              </div>
+            ) : (
+              <div className="bg-white rounded-3xl border border-zinc-200 shadow-xs overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs text-zinc-600">
+                    <thead className="bg-zinc-100/70 border-b border-zinc-200 text-[11px] font-bold text-zinc-500 uppercase tracking-wider">
+                      <tr>
+                        <th className="py-3.5 px-4">Cliente / Segurado</th>
+                        <th className="py-3.5 px-4">E-mail de Login</th>
+                        <th className="py-3.5 px-4">CPF / CNPJ</th>
+                        <th className="py-3.5 px-4">Data Nasc.</th>
+                        <th className="py-3.5 px-4">Apólices Vinculadas</th>
+                        <th className="py-3.5 px-4 text-right">Ações</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-zinc-100">
+                      {clientesFiltrados.map((cli) => {
+                        const apolicesDoCliente = apolices.filter((a) => a.cliente?.id === cli.id);
+                        const qtdApolices = apolicesDoCliente.length;
+
+                        return (
+                          <tr key={cli.id} className="hover:bg-zinc-50 transition-colors">
+                            <td className="py-4 px-4 flex items-center gap-3">
+                              <div className="w-8 h-8 rounded-xl bg-red-100 text-red-600 font-bold flex items-center justify-center text-xs shrink-0">
+                                {cli.nomeCompleto ? cli.nomeCompleto.charAt(0).toUpperCase() : 'C'}
+                              </div>
+                              <div>
+                                <div className="font-bold text-zinc-900">{cli.nomeCompleto}</div>
+                                <div className="text-[10px] text-zinc-400 font-mono">ID: #{cli.id}</div>
+                              </div>
+                            </td>
+                            <td className="py-4 px-4 font-medium text-zinc-800">{cli.email}</td>
+                            <td className="py-4 px-4 font-mono">{cli.cpfCnpj || '---'}</td>
+                            <td className="py-4 px-4">{formatarData(cli.dataNascimento)}</td>
+                            <td className="py-4 px-4">
+                              {qtdApolices > 0 ? (
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                  <CheckCircle size={14} weight="fill" />
+                                  <span>{qtdApolices} apólice(s)</span>
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-zinc-100 text-zinc-500 border border-zinc-200">
+                                  Sem apólices
+                                </span>
+                              )}
+                            </td>
+                            <td className="py-4 px-4 text-right">
+                              <button
+                                onClick={() => handleExcluirClienteClique(cli)}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-600 font-bold rounded-xl border border-red-200 transition-colors cursor-pointer text-xs"
+                              >
+                                <Trash size={14} weight="bold" />
+                                <span>Excluir</span>
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </>
+        )}
+      </main>
+
+      {/* MODAL: NOVO CLIENTE */}
+      {modalClienteAberto && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl max-w-lg w-full shadow-2xl overflow-hidden border border-zinc-200 p-6 animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-red-100 text-red-600 flex items-center justify-center">
+                  <UserPlus size={22} weight="bold" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-zinc-900">Cadastrar Novo Cliente</h3>
+                  <p className="text-xs text-zinc-500">Salva diretamente na API do Render</p>
+                </div>
+              </div>
+              <button onClick={() => setModalClienteAberto(false)} className="text-zinc-400 hover:text-zinc-600 font-bold text-xl cursor-pointer">&times;</button>
+            </div>
+
+            {erroCliente && (
+              <div className="mb-4 p-3 rounded-2xl bg-red-50 border border-red-200 text-red-700 text-xs font-semibold flex items-center gap-2">
+                <WarningCircle size={18} weight="fill" className="shrink-0 text-red-600" />
+                <span>{erroCliente}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleSalvarCliente} className="space-y-4 text-xs">
+              <div>
+                <label className="block text-zinc-700 font-semibold mb-1">Nome Completo *</label>
+                <input type="text" required value={formCliente.nomeCompleto} onChange={(e) => setFormCliente({...formCliente, nomeCompleto: e.target.value})} placeholder="Ex: Carlos Eduardo Mendes" className="w-full p-2.5 bg-zinc-50 border border-zinc-200 rounded-xl text-zinc-900 focus:ring-2 focus:ring-red-600 focus:outline-none" />
+              </div>
+
+              <div>
+                <label className="block text-zinc-700 font-semibold mb-1">E-mail (Login) *</label>
+                <input type="email" required value={formCliente.email} onChange={(e) => setFormCliente({...formCliente, email: e.target.value})} placeholder="carlos@email.com" className="w-full p-2.5 bg-zinc-50 border border-zinc-200 rounded-xl text-zinc-900 focus:ring-2 focus:ring-red-600 focus:outline-none" />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-zinc-700 font-semibold mb-1">CPF ou CNPJ *</label>
+                  <input type="text" required value={formCliente.cpfCnpj} onChange={(e) => setFormCliente({...formCliente, cpfCnpj: e.target.value})} placeholder="12345678900" className="w-full p-2.5 bg-zinc-50 border border-zinc-200 rounded-xl text-zinc-900 focus:ring-2 focus:ring-red-600 focus:outline-none" />
+                </div>
+                <div>
+                  <label className="block text-zinc-700 font-semibold mb-1">Data de Nascimento</label>
+                  <input type="date" value={formCliente.dataNascimento} onChange={(e) => setFormCliente({...formCliente, dataNascimento: e.target.value})} className="w-full p-2.5 bg-zinc-50 border border-zinc-200 rounded-xl text-zinc-900 focus:ring-2 focus:ring-red-600 focus:outline-none" />
+                </div>
+              </div>
+
+              <div className="pt-3 flex justify-end gap-2">
+                <button type="button" onClick={() => setModalClienteAberto(false)} className="px-4 py-2 font-bold text-zinc-600 hover:text-zinc-900 cursor-pointer">Cancelar</button>
+                <button type="submit" disabled={salvando} className="px-5 py-2.5 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl shadow-md cursor-pointer disabled:bg-red-400">{salvando ? 'Salvando...' : 'Cadastrar Cliente'}</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: NOVA / EDITAR APÓLICE */}
+      {modalFormAberto && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl max-w-3xl w-full shadow-2xl overflow-hidden border border-zinc-200 my-8 animate-in fade-in zoom-in-95 duration-200">
+            
+            {/* Header com identidade visual Seguraê */}
+            <div className="bg-zinc-900 text-white px-6 py-5 flex items-center justify-between border-b border-zinc-800">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-red-600/20 text-red-500 flex items-center justify-center border border-red-500/30">
+                  <ShieldCheck size={22} weight="fill" />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-base tracking-tight">
                     {formData.id ? 'Editar Apólice de Seguro' : 'Nova Apólice de Seguro'}
                   </h3>
-                  <p className="text-xs text-zinc-400">
-                    {formData.id
-                      ? `Atualizando registro nº ${formData.numeroApolice}`
-                      : 'Preencha os dados da apólice, do veículo e do segurado'}
+                  <p className="text-[11px] text-zinc-400">
+                    Preencha os dados da apólice, do veículo e selecione o segurado
                   </p>
                 </div>
               </div>
@@ -1088,298 +1085,232 @@ export default function AreaCorretor() {
               <button
                 type="button"
                 onClick={() => setModalFormAberto(false)}
-                className="w-8 h-8 rounded-full bg-zinc-800 text-zinc-400 hover:text-white flex items-center justify-center cursor-pointer transition-colors"
+                className="w-8 h-8 rounded-full bg-zinc-800/80 text-zinc-400 hover:text-white hover:bg-zinc-700 flex items-center justify-center cursor-pointer transition-colors"
               >
-                <X size={18} weight="bold" />
+                <X size={16} weight="bold" />
               </button>
             </div>
 
-            {/* Mensagem de Erro do Formulário */}
             {erroForm && (
-              <div className="mx-6 mt-6 p-3 rounded-2xl bg-red-50 border border-red-200 text-red-700 text-xs font-semibold flex items-center gap-2">
+              <div className="mx-6 mt-5 p-3 rounded-2xl bg-red-50 border border-red-200 text-red-700 text-xs font-semibold flex items-center gap-2">
                 <WarningCircle size={18} weight="fill" className="shrink-0 text-red-600" />
                 <span>{erroForm}</span>
               </div>
             )}
 
-            {/* Corpo do Formulário */}
             <form onSubmit={handleSalvarApolice}>
               <div className="p-6 space-y-6 max-h-[70vh] overflow-y-auto">
                 
-                {/* SEÇÃO 1: DADOS DA APÓLICE & CONDIÇÕES */}
+                {/* SEÇÃO 1: CARDS DE PLANOS */}
                 <div>
-                  <h4 className="text-xs font-bold text-zinc-500 uppercase tracking-wider mb-3 flex items-center gap-2">
-                    <FileText size={16} className="text-red-600" />
-                    <span>1. Dados da Apólice & Vigência</span>
-                  </h4>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
-                    <div>
-                      <label className="block text-zinc-700 font-semibold mb-1">
-                        Número da Apólice
-                      </label>
-                      <input
-                        type="text"
-                        value={formData.numeroApolice}
-                        onChange={(e) =>
-                          setFormData({ ...formData, numeroApolice: e.target.value })
-                        }
-                        placeholder="Ex: SEG-2026-X892A1"
-                        className="w-full px-3 py-2 bg-zinc-50 border border-zinc-200 rounded-xl text-zinc-900 font-mono focus:ring-2 focus:ring-red-600 focus:outline-none"
-                      />
-                    </div>
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 mb-3">
+                    <h4 className="text-xs font-bold text-zinc-500 uppercase tracking-wider flex items-center gap-2">
+                      <FileText size={15} className="text-red-600" />
+                      <span>1. Tipo de Cobertura Contratada *</span>
+                    </h4>
+                    <span className="text-[11px] text-zinc-400 font-medium">
+                      Clique em um plano para preencher o valor automaticamente
+                    </span>
+                  </div>
 
-                    <div>
-                      <label className="block text-zinc-700 font-semibold mb-1">
-                        Valor da Apólice (R$) *
-                      </label>
-                      <input
-                        type="number"
-                        step="0.01"
-                        value={formData.valorApolice}
-                        onChange={(e) =>
-                          setFormData({ ...formData, valorApolice: e.target.value })
-                        }
-                        placeholder="Ex: 3850.00"
-                        className="w-full px-3 py-2 bg-zinc-50 border border-zinc-200 rounded-xl text-zinc-900 font-bold focus:ring-2 focus:ring-red-600 focus:outline-none"
-                      />
-                    </div>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    {PLANOS_SEGURO.map((plano) => {
+                      const selecionado = formData.tipoCobertura.includes(plano.nome.split(' ')[0]);
+                      return (
+                        <div
+                          key={plano.nome}
+                          onClick={() => setFormData({ 
+                            ...formData, 
+                            tipoCobertura: plano.nome, 
+                            valorApolice: plano.valor 
+                          })}
+                          className={`cursor-pointer rounded-2xl p-4 border transition-all relative flex flex-col justify-between ${
+                            selecionado 
+                              ? 'border-red-600 bg-red-50/20 shadow-md ring-2 ring-red-600/15' 
+                              : 'border-zinc-200/80 bg-zinc-50/50 hover:border-zinc-300 hover:bg-white'
+                          }`}
+                        >
+                          <div>
+                            <div className="flex items-center justify-between mb-2">
+                              <span className={`text-[9px] font-extrabold uppercase px-2 py-0.5 rounded-md ${
+                                plano.tag === 'MAIS POPULAR' ? 'bg-red-600 text-white' : 'bg-zinc-200 text-zinc-700'
+                              }`}>
+                                {plano.tag}
+                              </span>
+                              {selecionado && <CheckCircle size={16} weight="fill" className="text-red-600" />}
+                            </div>
+                            <h5 className="font-bold text-zinc-900 text-xs mb-1">{plano.nome}</h5>
+                            <p className="text-[11px] text-zinc-500 leading-snug mb-3">{plano.desc}</p>
+                          </div>
 
-                    <div>
-                      <label className="block text-zinc-700 font-semibold mb-1">
-                        Status da Apólice *
-                      </label>
-                      <select
-                        value={formData.statusApolice}
-                        onChange={(e) =>
-                          setFormData({ ...formData, statusApolice: Number(e.target.value) })
-                        }
-                        className="w-full px-3 py-2 bg-zinc-50 border border-zinc-200 rounded-xl text-zinc-900 font-semibold focus:ring-2 focus:ring-red-600 focus:outline-none"
-                      >
-                        <option value={1}>1 - Ativa</option>
-                        <option value={2}>2 - Vencida</option>
-                        <option value={0}>0 - Pendente / Em Análise</option>
-                      </select>
-                    </div>
-
-                    <div className="sm:col-span-3">
-                      <label className="block text-zinc-700 font-semibold mb-1">
-                        Tipo de Cobertura Contratada *
-                      </label>
-                      <input
-                        type="text"
-                        value={formData.tipoCobertura}
-                        onChange={(e) =>
-                          setFormData({ ...formData, tipoCobertura: e.target.value })
-                        }
-                        placeholder="Ex: Total 100% FIPE + Terceiros (R$ 150k)"
-                        className="w-full px-3 py-2 bg-zinc-50 border border-zinc-200 rounded-xl text-zinc-900 focus:ring-2 focus:ring-red-600 focus:outline-none"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-zinc-700 font-semibold mb-1">
-                        Data de Início da Vigência *
-                      </label>
-                      <input
-                        type="date"
-                        value={formData.dataInicio}
-                        onChange={(e) =>
-                          setFormData({ ...formData, dataInicio: e.target.value })
-                        }
-                        className="w-full px-3 py-2 bg-zinc-50 border border-zinc-200 rounded-xl text-zinc-900 focus:ring-2 focus:ring-red-600 focus:outline-none"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-zinc-700 font-semibold mb-1">
-                        Data de Término da Vigência *
-                      </label>
-                      <input
-                        type="date"
-                        value={formData.dataTermino}
-                        onChange={(e) =>
-                          setFormData({ ...formData, dataTermino: e.target.value })
-                        }
-                        className="w-full px-3 py-2 bg-zinc-50 border border-zinc-200 rounded-xl text-zinc-900 focus:ring-2 focus:ring-red-600 focus:outline-none"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-zinc-700 font-semibold mb-1">
-                        Tipo de Bem
-                      </label>
-                      <select
-                        value={formData.bemSegurado}
-                        onChange={(e) =>
-                          setFormData({ ...formData, bemSegurado: e.target.value })
-                        }
-                        className="w-full px-3 py-2 bg-zinc-50 border border-zinc-200 rounded-xl text-zinc-900 focus:ring-2 focus:ring-red-600 focus:outline-none"
-                      >
-                        <option value="Automóvel Passeio">Automóvel Passeio</option>
-                        <option value="SUV Urbano">SUV Urbano</option>
-                        <option value="Pick-up / Caminhonete">Pick-up / Caminhonete</option>
-                        <option value="Motocicleta">Motocicleta</option>
-                        <option value="Caminhão / Comercial">Caminhão / Comercial</option>
-                      </select>
-                    </div>
+                          <div className="flex items-center justify-between pt-2.5 border-t border-zinc-200/60 text-xs">
+                            <span className="text-[10px] text-zinc-400 font-medium">Sugerido</span>
+                            <span className="font-black text-zinc-900">R$ {plano.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
 
-                {/* SEÇÃO 2: DADOS DO VEÍCULO */}
+                {/* DATAS E TIPO DE BEM */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 pt-4 border-t border-zinc-100 text-xs">
+                  <div>
+                    <label className="block text-zinc-700 font-semibold mb-1.5">Início da Vigência *</label>
+                    <input
+                      type="date"
+                      value={formData.dataInicio}
+                      onChange={(e) => setFormData({ ...formData, dataInicio: e.target.value })}
+                      className="w-full px-3.5 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl text-zinc-900 focus:ring-2 focus:ring-red-600 focus:bg-white focus:outline-none transition-all"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-zinc-700 font-semibold mb-1.5">Término da Vigência *</label>
+                    <input
+                      type="date"
+                      value={formData.dataTermino}
+                      onChange={(e) => setFormData({ ...formData, dataTermino: e.target.value })}
+                      className="w-full px-3.5 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl text-zinc-900 focus:ring-2 focus:ring-red-600 focus:bg-white focus:outline-none transition-all"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-zinc-700 font-semibold mb-1.5">Tipo de Bem</label>
+                    <select
+                      value={formData.bemSegurado}
+                      onChange={(e) => setFormData({ ...formData, bemSegurado: e.target.value })}
+                      className="w-full px-3.5 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl text-zinc-900 focus:ring-2 focus:ring-red-600 focus:bg-white focus:outline-none transition-all cursor-pointer"
+                    >
+                      <option value="Automóvel Passeio">Automóvel Passeio</option>
+                      <option value="SUV Urbano">SUV Urbano</option>
+                      <option value="Pick-up / Caminhonete">Pick-up / Caminhonete</option>
+                      <option value="Motocicleta">Motocicleta</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* SEÇÃO 2: IDENTIFICAÇÃO DO VEÍCULO */}
                 <div className="pt-4 border-t border-zinc-100">
-                  <h4 className="text-xs font-bold text-zinc-500 uppercase tracking-wider mb-3 flex items-center gap-2">
-                    <Car size={16} className="text-red-600" />
+                  <h4 className="text-xs font-bold text-zinc-500 uppercase tracking-wider mb-3.5 flex items-center gap-2">
+                    <Car size={15} className="text-red-600" />
                     <span>2. Identificação do Veículo</span>
                   </h4>
-                  <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 text-xs">
+                  
+                  <div className="grid grid-cols-1 sm:grid-cols-4 gap-3.5 text-xs">
                     <div className="sm:col-span-2">
-                      <label className="block text-zinc-700 font-semibold mb-1">
-                        Marca e Modelo do Veículo *
-                      </label>
+                      <label className="block text-zinc-700 font-semibold mb-1.5">Marca e Modelo do Veículo *</label>
                       <input
                         type="text"
                         value={formData.marcaModelo}
-                        onChange={(e) =>
-                          setFormData({ ...formData, marcaModelo: e.target.value })
-                        }
+                        onChange={(e) => setFormData({ ...formData, marcaModelo: e.target.value })}
                         placeholder="Ex: Toyota Corolla Cross XRE 2.0"
-                        className="w-full px-3 py-2 bg-zinc-50 border border-zinc-200 rounded-xl text-zinc-900 focus:ring-2 focus:ring-red-600 focus:outline-none"
+                        className="w-full px-3.5 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl text-zinc-900 focus:ring-2 focus:ring-red-600 focus:bg-white focus:outline-none transition-all"
                       />
                     </div>
-
+                    
                     <div>
-                      <label className="block text-zinc-700 font-semibold mb-1">
-                        Placa (7 dígitos) *
-                      </label>
+                      <label className="block text-zinc-700 font-semibold mb-1.5">Placa (7 dígitos) *</label>
                       <input
                         type="text"
                         maxLength={7}
                         value={formData.placa}
-                        onChange={(e) =>
-                          setFormData({ ...formData, placa: e.target.value.toUpperCase() })
-                        }
+                        onChange={(e) => setFormData({ ...formData, placa: e.target.value.toUpperCase() })}
                         placeholder="BRA2E19"
-                        className="w-full px-3 py-2 bg-zinc-50 border border-zinc-200 rounded-xl text-zinc-900 font-mono font-bold tracking-wider focus:ring-2 focus:ring-red-600 focus:outline-none"
+                        className="w-full px-3.5 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl text-zinc-900 font-mono font-bold tracking-wider uppercase focus:ring-2 focus:ring-red-600 focus:bg-white focus:outline-none transition-all"
                       />
                     </div>
 
                     <div>
-                      <label className="block text-zinc-700 font-semibold mb-1">
-                        Ano do Modelo *
-                      </label>
+                      <label className="block text-zinc-700 font-semibold mb-1.5">Ano do Modelo *</label>
                       <input
                         type="number"
-                        min={1900}
-                        max={2100}
                         value={formData.anoModelo}
-                        onChange={(e) =>
-                          setFormData({ ...formData, anoModelo: e.target.value })
-                        }
-                        className="w-full px-3 py-2 bg-zinc-50 border border-zinc-200 rounded-xl text-zinc-900 focus:ring-2 focus:ring-red-600 focus:outline-none"
+                        onChange={(e) => setFormData({ ...formData, anoModelo: e.target.value })}
+                        className="w-full px-3.5 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl text-zinc-900 focus:ring-2 focus:ring-red-600 focus:bg-white focus:outline-none transition-all"
                       />
                     </div>
 
                     <div className="sm:col-span-2">
-                      <label className="block text-zinc-700 font-semibold mb-1">
-                        Código Renavam (9 a 11 dígitos) *
-                      </label>
+                      <label className="block text-zinc-700 font-semibold mb-1.5">Código Renavam *</label>
                       <input
                         type="text"
                         maxLength={11}
                         value={formData.renavam}
-                        onChange={(e) =>
-                          setFormData({ ...formData, renavam: e.target.value })
-                        }
+                        onChange={(e) => setFormData({ ...formData, renavam: e.target.value })}
                         placeholder="Ex: 00123456789"
-                        className="w-full px-3 py-2 bg-zinc-50 border border-zinc-200 rounded-xl text-zinc-900 font-mono focus:ring-2 focus:ring-red-600 focus:outline-none"
+                        className="w-full px-3.5 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl text-zinc-900 font-mono focus:ring-2 focus:ring-red-600 focus:bg-white focus:outline-none transition-all"
                       />
+                    </div>
+
+                    <div className="sm:col-span-2">
+                      <label className="block text-zinc-700 font-semibold mb-1.5">Valor Final da Apólice (R$) *</label>
+                      <div className="relative flex items-center">
+                        <span className="absolute left-3.5 text-zinc-400 font-bold">R$</span>
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={formData.valorApolice}
+                          onChange={(e) => setFormData({ ...formData, valorApolice: e.target.value })}
+                          className="w-full pl-10 pr-4 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl text-red-600 font-black focus:ring-2 focus:ring-red-600 focus:bg-white focus:outline-none transition-all"
+                        />
+                      </div>
                     </div>
                   </div>
                 </div>
 
-                {/* SEÇÃO 3: TITULAR (CLIENTE / SEGURADO) */}
+                {/* SEÇÃO 3: CLIENTE / SEGURADO */}
                 <div className="pt-4 border-t border-zinc-100">
-                  <h4 className="text-xs font-bold text-zinc-500 uppercase tracking-wider mb-3 flex items-center gap-2">
-                    <User size={16} className="text-red-600" />
-                    <span>3. Cliente / Segurado Responsável</span>
-                  </h4>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-                    <div>
-                      <label className="block text-zinc-700 font-semibold mb-1">
-                        Nome Completo do Cliente *
-                      </label>
-                      <input
-                        type="text"
-                        value={formData.clienteNome}
-                        onChange={(e) =>
-                          setFormData({ ...formData, clienteNome: e.target.value })
-                        }
-                        placeholder="Ex: Carlos Eduardo Mendes"
-                        className="w-full px-3 py-2 bg-zinc-50 border border-zinc-200 rounded-xl text-zinc-900 focus:ring-2 focus:ring-red-600 focus:outline-none"
-                      />
-                    </div>
+                  <div className="flex items-center justify-between mb-3.5">
+                    <h4 className="text-xs font-bold text-zinc-500 uppercase tracking-wider flex items-center gap-2">
+                      <User size={15} className="text-red-600" />
+                      <span>3. Segurado Responsável</span>
+                    </h4>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setModalFormAberto(false);
+                        handleNovoCliente();
+                      }}
+                      className="text-xs font-bold text-red-600 hover:text-red-700 hover:underline cursor-pointer flex items-center gap-1"
+                    >
+                      <Plus size={14} weight="bold" />
+                      <span>Cadastrar Novo Cliente</span>
+                    </button>
+                  </div>
 
-                    <div>
-                      <label className="block text-zinc-700 font-semibold mb-1">
-                        CPF ou CNPJ
-                      </label>
-                      <input
-                        type="text"
-                        value={formData.clienteCpfCnpj}
-                        onChange={(e) =>
-                          setFormData({ ...formData, clienteCpfCnpj: e.target.value })
-                        }
-                        placeholder="000.000.000-00"
-                        className="w-full px-3 py-2 bg-zinc-50 border border-zinc-200 rounded-xl text-zinc-900 focus:ring-2 focus:ring-red-600 focus:outline-none"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-zinc-700 font-semibold mb-1">
-                        E-mail do Segurado
-                      </label>
-                      <input
-                        type="email"
-                        value={formData.clienteEmail}
-                        onChange={(e) =>
-                          setFormData({ ...formData, clienteEmail: e.target.value })
-                        }
-                        placeholder="cliente@email.com"
-                        className="w-full px-3 py-2 bg-zinc-50 border border-zinc-200 rounded-xl text-zinc-900 focus:ring-2 focus:ring-red-600 focus:outline-none"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-zinc-700 font-semibold mb-1">
-                        Data de Nascimento
-                      </label>
-                      <input
-                        type="date"
-                        value={formData.clienteDataNasc}
-                        onChange={(e) =>
-                          setFormData({ ...formData, clienteDataNasc: e.target.value })
-                        }
-                        className="w-full px-3 py-2 bg-zinc-50 border border-zinc-200 rounded-xl text-zinc-900 focus:ring-2 focus:ring-red-600 focus:outline-none"
-                      />
-                    </div>
+                  <div className="text-xs">
+                    <select
+                      value={formData.clienteId}
+                      onChange={(e) => setFormData({ ...formData, clienteId: e.target.value })}
+                      className="w-full px-3.5 py-3 bg-zinc-50 border border-zinc-200 rounded-xl text-zinc-900 font-semibold focus:ring-2 focus:ring-red-600 focus:bg-white focus:outline-none transition-all cursor-pointer"
+                    >
+                      <option value="">Selecione um cliente da base...</option>
+                      {clientes.map((cliente) => (
+                        <option key={cliente.id} value={cliente.id}>
+                          {cliente.nomeCompleto} — {cliente.email} ({cliente.cpfCnpj || 'N/D'})
+                        </option>
+                      ))}
+                    </select>
+                    <p className="text-[11px] text-zinc-400 mt-1.5">
+                      A apólice é vinculada diretamente à conta do segurado. Ao logar com este e-mail, o titular visualizará o seguro em seu painel.
+                    </p>
                   </div>
                 </div>
 
               </div>
 
-              {/* Footer de Ações do Modal */}
-              <div className="p-4 bg-zinc-50 border-t border-zinc-100 flex items-center justify-end gap-3">
+              {/* FOOTER */}
+              <div className="px-6 py-4 bg-zinc-50 border-t border-zinc-100 flex items-center justify-end gap-3">
                 <button
                   type="button"
                   onClick={() => setModalFormAberto(false)}
-                  className="px-4 py-2 text-xs font-bold text-zinc-600 hover:text-zinc-900 cursor-pointer"
+                  className="px-4 py-2.5 text-xs font-bold text-zinc-600 hover:text-zinc-900 cursor-pointer transition-colors"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
                   disabled={salvando}
-                  className="px-5 py-2.5 bg-red-600 hover:bg-red-700 disabled:bg-red-400 text-white font-bold rounded-xl text-xs flex items-center gap-2 shadow-md shadow-red-600/20 cursor-pointer transition-colors"
+                  className="px-6 py-3 bg-red-600 hover:bg-red-700 disabled:bg-red-400 text-white font-bold rounded-2xl text-xs flex items-center gap-2 shadow-lg shadow-red-600/25 cursor-pointer transition-all"
                 >
                   {salvando ? (
                     <span>Salvando...</span>
@@ -1396,195 +1327,33 @@ export default function AreaCorretor() {
         </div>
       )}
 
-      {/* ========================================================================= */}
-      {/* MODAL 2: VISUALIZAÇÃO COMPLETA DE DETALHES                                */}
-      {/* ========================================================================= */}
-      {modalDetalhesAberto && apoliceSelecionada && (
+      {/* MODAL: EXCLUIR CLIENTE */}
+      {modalExcluirClienteAberto && clienteParaExcluir && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-2xl w-full shadow-2xl overflow-hidden border border-zinc-200 animate-in fade-in zoom-in-95 duration-200">
-            
-            <div className="bg-zinc-900 text-white p-6 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-red-600/20 text-red-500 flex items-center justify-center">
-                  <ShieldCheck size={24} weight="fill" />
-                </div>
-                <div>
-                  <h3 className="font-bold text-lg leading-none">
-                    Detalhes da Apólice
-                  </h3>
-                  <span className="text-xs font-mono text-zinc-400">
-                    {apoliceSelecionada.numeroApolice}
-                  </span>
-                </div>
-              </div>
-
-              <button
-                onClick={() => setModalDetalhesAberto(false)}
-                className="w-8 h-8 rounded-full bg-zinc-800 text-zinc-400 hover:text-white flex items-center justify-center cursor-pointer transition-colors"
-              >
-                <X size={18} weight="bold" />
-              </button>
-            </div>
-
-            <div className="p-6 space-y-6 max-h-[75vh] overflow-y-auto text-xs">
-              
-              {/* Veículo */}
-              <div>
-                <h4 className="font-bold text-zinc-400 uppercase tracking-wider mb-3">
-                  Veículo & Identificação
-                </h4>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                  <div className="bg-zinc-50 p-3 rounded-xl border border-zinc-100">
-                    <span className="text-zinc-500 block">Marca / Modelo</span>
-                    <span className="font-bold text-zinc-900">{apoliceSelecionada.marcaModelo}</span>
-                  </div>
-                  <div className="bg-zinc-50 p-3 rounded-xl border border-zinc-100">
-                    <span className="text-zinc-500 block">Placa</span>
-                    <span className="font-mono font-bold text-zinc-900">{apoliceSelecionada.placa}</span>
-                  </div>
-                  <div className="bg-zinc-50 p-3 rounded-xl border border-zinc-100">
-                    <span className="text-zinc-500 block">Renavam</span>
-                    <span className="font-mono font-bold text-zinc-900">{apoliceSelecionada.renavam}</span>
-                  </div>
-                  <div className="bg-zinc-50 p-3 rounded-xl border border-zinc-100">
-                    <span className="text-zinc-500 block">Ano do Modelo</span>
-                    <span className="font-bold text-zinc-900">{apoliceSelecionada.anoModelo}</span>
-                  </div>
-                  <div className="bg-zinc-50 p-3 rounded-xl border border-zinc-100">
-                    <span className="text-zinc-500 block">Tipo do Bem</span>
-                    <span className="font-bold text-zinc-900">{apoliceSelecionada.bemSegurado}</span>
-                  </div>
-                  <div className="bg-zinc-50 p-3 rounded-xl border border-zinc-100">
-                    <span className="text-zinc-500 block">Status da Apólice</span>
-                    <div className="mt-1">{renderStatusBadge(apoliceSelecionada.statusApolice)}</div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Condições */}
-              <div>
-                <h4 className="font-bold text-zinc-400 uppercase tracking-wider mb-3">
-                  Condições do Seguro & Valores
-                </h4>
-                <div className="bg-zinc-50 p-4 rounded-xl border border-zinc-100 space-y-3">
-                  <div>
-                    <span className="text-zinc-500 block">Cobertura Contratada</span>
-                    <span className="font-bold text-zinc-900">{apoliceSelecionada.tipoCobertura}</span>
-                  </div>
-                  <div className="grid grid-cols-2 gap-3 pt-2 border-t border-zinc-200/60">
-                    <div>
-                      <span className="text-zinc-500 block">Valor da Apólice</span>
-                      <span className="font-black text-red-600 text-sm">
-                        {formatarMoeda(apoliceSelecionada.valorApolice)}
-                      </span>
-                    </div>
-                    <div>
-                      <span className="text-zinc-500 block">Período de Vigência</span>
-                      <span className="font-bold text-zinc-900">
-                        {formatarData(apoliceSelecionada.dataInicio)} até {formatarData(apoliceSelecionada.dataTermino)}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Cliente & Corretor */}
-              <div>
-                <h4 className="font-bold text-zinc-400 uppercase tracking-wider mb-3">
-                  Titular & Corretor Responsável
-                </h4>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div className="bg-zinc-50 p-3.5 rounded-xl border border-zinc-100">
-                    <span className="text-zinc-500 block">Cliente / Segurado</span>
-                    <span className="font-bold text-zinc-900 block text-sm">
-                      {apoliceSelecionada.cliente?.nomeCompleto || apoliceSelecionada.usuario?.nome}
-                    </span>
-                    <span className="text-[11px] text-zinc-500 block">
-                      CPF: {apoliceSelecionada.cliente?.cpfCnpj || '---'}
-                    </span>
-                    <span className="text-[11px] text-zinc-500 block">
-                      Email: {apoliceSelecionada.cliente?.email || '---'}
-                    </span>
-                  </div>
-
-                  <div className="bg-zinc-50 p-3.5 rounded-xl border border-zinc-100">
-                    <span className="text-zinc-500 block">Corretor Responsável</span>
-                    <span className="font-bold text-zinc-900 block text-sm">
-                      {apoliceSelecionada.usuario?.nome || 'Mariana Silva (Corretora)'}
-                    </span>
-                    <span className="text-[11px] text-zinc-500 block">
-                      Email: {apoliceSelecionada.usuario?.email || 'mariana.corretora@segurae.com.br'}
-                    </span>
-                    <span className="text-[11px] text-zinc-500 block">
-                      Código SUSEP: 2026.SP.8901
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-            </div>
-
-            <div className="p-4 bg-zinc-50 border-t border-zinc-100 flex items-center justify-end gap-3">
-              <button
-                onClick={() => setModalDetalhesAberto(false)}
-                className="px-4 py-2 text-xs font-bold text-zinc-600 hover:text-zinc-900 cursor-pointer"
-              >
-                Fechar
-              </button>
-              <button
-                onClick={() => {
-                  setModalDetalhesAberto(false);
-                  handleEditarApolice(apoliceSelecionada);
-                }}
-                className="px-4 py-2 bg-zinc-900 hover:bg-zinc-800 text-white text-xs font-bold rounded-xl transition-colors cursor-pointer flex items-center gap-1.5"
-              >
-                <PencilSimple size={16} />
-                <span>Editar Apólice</span>
-              </button>
+          <div className="bg-white rounded-3xl max-w-md w-full shadow-2xl p-6">
+            <div className="w-12 h-12 rounded-2xl bg-red-100 text-red-600 flex items-center justify-center mb-4 mx-auto"><Trash size={26} weight="bold" /></div>
+            <h3 className="text-lg font-extrabold text-zinc-900 text-center mb-2">Confirmar Exclusão de Cliente</h3>
+            <p className="text-xs text-zinc-500 text-center mb-6">
+              Deseja excluir permanentemente o cliente <strong className="text-zinc-900">{clienteParaExcluir.nomeCompleto}</strong> do servidor Render?
+            </p>
+            <div className="flex items-center gap-3">
+              <button onClick={() => { setModalExcluirClienteAberto(false); setClienteParaExcluir(null); }} className="flex-1 py-2.5 bg-zinc-100 text-zinc-800 text-xs font-bold rounded-xl">Cancelar</button>
+              <button onClick={handleConfirmarExclusaoCliente} disabled={salvando} className="flex-1 py-2.5 bg-red-600 text-white text-xs font-bold rounded-xl shadow-md">{salvando ? 'Excluindo...' : 'Sim, Excluir'}</button>
             </div>
           </div>
         </div>
       )}
 
-      {/* ========================================================================= */}
-      {/* MODAL 3: CONFIRMAÇÃO DE EXCLUSÃO                                          */}
-      {/* ========================================================================= */}
+      {/* MODAL: EXCLUIR APÓLICE */}
       {modalExcluirAberto && apoliceParaExcluir && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-md w-full shadow-2xl overflow-hidden border border-zinc-200 animate-in fade-in zoom-in-95 duration-200 p-6">
-            <div className="w-12 h-12 rounded-2xl bg-red-100 text-red-600 flex items-center justify-center mb-4 mx-auto">
-              <Trash size={26} weight="bold" />
-            </div>
-
-            <h3 className="text-lg font-extrabold text-zinc-900 text-center mb-2">
-              Confirmar Exclusão de Apólice
-            </h3>
-
-            <p className="text-xs text-zinc-500 text-center mb-6 leading-relaxed">
-              Você tem certeza de que deseja excluir permanentemente a apólice{' '}
-              <strong className="text-zinc-900 font-bold">{apoliceParaExcluir.numeroApolice}</strong> vinculada ao veículo{' '}
-              <strong className="text-zinc-900 font-bold">{apoliceParaExcluir.marcaModelo} ({apoliceParaExcluir.placa})</strong>?
-              Esta ação removerá o contrato do sistema.
-            </p>
-
+          <div className="bg-white rounded-3xl max-w-md w-full shadow-2xl p-6">
+            <div className="w-12 h-12 rounded-2xl bg-red-100 text-red-600 flex items-center justify-center mb-4 mx-auto"><Trash size={26} weight="bold" /></div>
+            <h3 className="text-lg font-extrabold text-zinc-900 text-center mb-2">Confirmar Exclusão de Apólice</h3>
+            <p className="text-xs text-zinc-500 text-center mb-6">Deseja excluir a apólice <strong className="text-zinc-900">{apoliceParaExcluir.numeroApolice}</strong>?</p>
             <div className="flex items-center gap-3">
-              <button
-                onClick={() => {
-                  setModalExcluirAberto(false);
-                  setApoliceParaExcluir(null);
-                }}
-                disabled={salvando}
-                className="flex-1 py-2.5 px-4 bg-zinc-100 hover:bg-zinc-200 text-zinc-800 text-xs font-bold rounded-xl transition-colors cursor-pointer"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={handleConfirmarExclusao}
-                disabled={salvando}
-                className="flex-1 py-2.5 px-4 bg-red-600 hover:bg-red-700 disabled:bg-red-400 text-white text-xs font-bold rounded-xl shadow-md shadow-red-600/20 transition-colors cursor-pointer flex items-center justify-center gap-1.5"
-              >
-                {salvando ? <span>Excluindo...</span> : <span>Sim, Excluir</span>}
-              </button>
+              <button onClick={() => setModalExcluirAberto(false)} className="flex-1 py-2.5 bg-zinc-100 text-zinc-800 text-xs font-bold rounded-xl">Cancelar</button>
+              <button onClick={handleConfirmarExclusao} disabled={salvando} className="flex-1 py-2.5 bg-red-600 text-white text-xs font-bold rounded-xl">{salvando ? 'Excluindo...' : 'Sim, Excluir'}</button>
             </div>
           </div>
         </div>

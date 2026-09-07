@@ -1,8 +1,10 @@
-import { useContext } from "react";
+import { useContext, useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import NavBar from "../../components/navbar/NavBar";
 import Footer from "../../components/footer/Footer";
 import { AuthContext } from "../../contexts/AuthContext";
+import { buscar } from "../../services/Service";
+import type Apolice from "../../models/Apolice";
 import { 
   ShieldCheck, 
   Car, 
@@ -11,15 +13,81 @@ import {
   PhoneCall, 
   ClockCountdown, 
   User, 
-  CheckCircle 
+  CheckCircle,
+  WarningCircle
 } from "@phosphor-icons/react";
+
+const getAuthHeader = (token?: string) => {
+  const tokenFinal = token || localStorage.getItem("token") || "";
+  if (!tokenFinal) return {};
+  const tokenFormatado = tokenFinal.startsWith("Bearer ") ? tokenFinal : `Bearer ${tokenFinal}`;
+  return { headers: { Authorization: tokenFormatado } };
+};
 
 export default function DashboardCliente() {
   const navigate = useNavigate();
   const { usuario, handleLogout } = useContext(AuthContext);
 
+  const [minhasApolices, setMinhasApolices] = useState<Apolice[]>([]);
+  const [carregando, setCarregando] = useState(true);
+
   const nomeExibicao = usuario.nome || localStorage.getItem("nome") || "Cliente Seguraê";
   const emailExibicao = usuario.usuario || localStorage.getItem("usuario") || "cliente@segurae.com";
+
+  useEffect(() => {
+    const carregarDadosCliente = async () => {
+      if (!usuario || !usuario.token) {
+        setCarregando(false);
+        return;
+      }
+
+      try {
+        const header = getAuthHeader(usuario.token);
+        const resposta = await buscar("/apolices", undefined, header).catch(() => []);
+
+        if (Array.isArray(resposta)) {
+          // Filtra rigorosamente apenas as apólices do cliente logado
+          const filtradas = resposta.filter((apolice: Apolice) => {
+            const emailCliente = apolice.cliente?.email?.toLowerCase();
+            const emailUsuario = usuario.usuario?.toLowerCase();
+            const idCliente = apolice.cliente?.id;
+            const idUsuario = usuario.id;
+
+            return (
+              (emailCliente && emailUsuario && emailCliente === emailUsuario) ||
+              (idCliente && idUsuario && idCliente === idUsuario) ||
+              apolice.usuario?.id === idUsuario
+            );
+          });
+          setMinhasApolices(filtradas);
+        }
+      } catch (error) {
+        console.error("Erro ao buscar apólices do cliente:", error);
+      } finally {
+        setCarregando(false);
+      }
+    };
+
+    carregarDadosCliente();
+  }, [usuario]);
+
+  const apolicePrincipal = minhasApolices.length > 0 ? minhasApolices[0] : null;
+
+  const formatarMoeda = (valor: number) => {
+    return Number(valor || 0).toLocaleString("pt-BR", {
+      style: "currency",
+      currency: "BRL",
+    });
+  };
+
+  const formatarData = (dataStr?: string) => {
+    if (!dataStr) return "Dezembro / 2026";
+    const partes = dataStr.split("-");
+    if (partes.length === 3) {
+      return `${partes[2]}/${partes[1]}/${partes[0]}`;
+    }
+    return dataStr;
+  };
 
   return (
     <div className="w-full min-h-screen bg-zinc-50 text-zinc-900 relative flex flex-col justify-between">
@@ -46,7 +114,7 @@ export default function DashboardCliente() {
               to="/apolices"
               className="px-5 py-2.5 rounded-full bg-red-600 hover:bg-red-700 text-white text-sm font-semibold transition-all shadow-md shadow-red-600/20"
             >
-              Ver Minhas Apólices
+              Ver Minhas Apólices ({minhasApolices.length})
             </Link>
             <button
               type="button"
@@ -63,7 +131,8 @@ export default function DashboardCliente() {
 
         {/* Grid de Cards de Destaque */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
-          {/* Card 1: Seguro Vigente */}
+          
+          {/* Card 1: Seguro Vigente (Dinâmico da API) */}
           <div className="bg-white rounded-3xl p-6 border border-zinc-200/80 shadow-xs relative overflow-hidden flex flex-col justify-between">
             <div>
               <div className="flex items-center justify-between mb-4">
@@ -71,17 +140,44 @@ export default function DashboardCliente() {
                   <Car size={16} weight="bold" className="text-red-600" />
                   Veículo Protegido
                 </span>
-                <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-600 border border-emerald-100 flex items-center gap-1">
-                  <CheckCircle size={12} weight="fill" />
-                  Ativa
-                </span>
+                
+                {carregando ? (
+                  <span className="text-xs text-zinc-400">Carregando...</span>
+                ) : apolicePrincipal ? (
+                  <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-600 border border-emerald-100 flex items-center gap-1">
+                    <CheckCircle size={12} weight="fill" />
+                    {apolicePrincipal.statusApolice === 1 ? "Ativa" : "Pendente"}
+                  </span>
+                ) : (
+                  <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-50 text-amber-600 border border-amber-100 flex items-center gap-1">
+                    <WarningCircle size={12} weight="fill" />
+                    Sem Apólice
+                  </span>
+                )}
               </div>
-              <h3 className="text-xl font-bold text-zinc-900 mb-1">
-                Seguro Auto Essencial Plus
-              </h3>
-              <p className="text-xs text-zinc-500 mb-4">
-                Apólice digital vinculada ao CPF cadastrado
-              </p>
+
+              {carregando ? (
+                <div className="py-4 text-zinc-400 text-xs">Buscando contrato...</div>
+              ) : apolicePrincipal ? (
+                <>
+                  <h3 className="text-xl font-bold text-zinc-900 mb-1">
+                    {apolicePrincipal.marcaModelo}
+                  </h3>
+                  <p className="text-xs text-zinc-500 mb-2">
+                    Placa: <strong className="font-mono text-zinc-800">{apolicePrincipal.placa}</strong> • {apolicePrincipal.bemSegurado}
+                  </p>
+                  <p className="text-xs font-bold text-red-600 mb-4">
+                    Prêmio: {formatarMoeda(Number(apolicePrincipal.valorApolice))}
+                  </p>
+                </>
+              ) : (
+                <>
+                  <h3 className="text-xl font-bold text-zinc-900 mb-1">Nenhum Seguro Encontrado</h3>
+                  <p className="text-xs text-zinc-500 mb-4">
+                    Entre em contato com seu corretor para emitir sua apólice digital.
+                  </p>
+                </>
+              )}
             </div>
             
             <div className="pt-4 border-t border-zinc-100 flex items-center justify-between text-xs text-zinc-600">
@@ -89,7 +185,9 @@ export default function DashboardCliente() {
                 <ClockCountdown size={14} weight="bold" />
                 Vigência até:
               </span>
-              <span className="font-semibold text-zinc-900">Dezembro / 2026</span>
+              <span className="font-semibold text-zinc-900">
+                {apolicePrincipal ? formatarData(apolicePrincipal.dataTermino) : "---"}
+              </span>
             </div>
           </div>
 
@@ -165,7 +263,7 @@ export default function DashboardCliente() {
               </p>
             </div>
             <Link
-              to="/coberturas"
+              to="/apolices"
               className="text-xs font-semibold text-red-600 hover:underline"
             >
               Ver detalhes do plano &rarr;
