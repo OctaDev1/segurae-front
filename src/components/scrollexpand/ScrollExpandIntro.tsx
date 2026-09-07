@@ -75,7 +75,7 @@ export default function ScrollExpandIntro({ children }: ScrollExpandIntroProps) 
 
               {/* Nome da Marca com Ponto Vermelho */}
               <h1 className="text-3xl sm:text-4xl font-extrabold text-zinc-900 tracking-tight">
-                Seguraê<span className="text-red-600">.</span>
+                Segura<span className="text-red-600">ê.</span>
               </h1>
 
               {/* Badge da Categoria */}

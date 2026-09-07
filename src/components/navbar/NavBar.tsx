@@ -143,7 +143,7 @@ function Navbar() {
           className="w-8 h-8"
         />
         <span className="text-xl sm:text-2xl font-bold text-zinc-900 ml-2 sm:ml-3 tracking-tight">
-          Seguraê
+          Segura<span className="text-red-600">ê</span>
         </span>
       </Link>
 

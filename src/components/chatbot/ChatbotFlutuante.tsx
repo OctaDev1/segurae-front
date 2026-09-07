@@ -25,12 +25,11 @@ export default function ChatbotFlutuante() {
   // Saudação inicial
   const saudacaoInicial: Mensagem = {
     id: 1,
-    texto: 'Olá! 👋\nSou o assistente virtual da Seguraê.\n\nPosso ajudar você a encontrar um seguro, consultar preços, entender coberturas ou tirar suas dúvidas.\n\nComo posso ajudar?',
+    texto: 'Olá! 👋\nSou o assistente virtual da Seguraê.\n\nPosso ajudar você a encontrar o plano de Seguro Auto ideal, consultar preços ou tirar suas dúvidas.\n\nComo posso ajudar?',
     remetente: 'bot',
     botoes: [
-      { texto: '💰 Preços', acao: () => processarTexto('preços') },
+      { texto: '💰 Nossos Planos', acao: () => processarTexto('planos') },
       { texto: '🛡️ Coberturas', acao: () => processarTexto('coberturas') },
-      { texto: '📋 FAQ', acao: () => processarTexto('faq') },
       { texto: '💬 Falar conosco', acao: () => processarTexto('contato') },
       { texto: '🚗 Fazer cotação', rota: '/coberturas' }
     ]
@@ -46,31 +45,14 @@ export default function ChatbotFlutuante() {
   const processarIntencao = (texto: string): Omit<Mensagem, 'id' | 'remetente'> => {
     const txt = texto.toLowerCase();
 
-    // 1. INTENÇÃO: PREÇO / VALOR
-    if (txt.match(/preço|preco|valor|custa|custo|pago|pagar/)) {
-      if (txt.match(/auto|carro|veiculo|veículo/)) {
-        return {
-          texto: 'O Seguro Auto da Seguraê está disponível a partir de R$ 139/mês (Plano Essencial).\n\nAs condições podem variar conforme o perfil do cliente, veículo e coberturas escolhidas.',
-          botoes: [
-            { texto: '🛡️ Ver condições', rota: '/coberturas' },
-            { texto: '🚗 Fazer cotação', rota: '/coberturas' },
-            { texto: '💬 Falar com consultor', rota: '/contato' }
-          ]
-        };
-      } else if (txt.match(/residencial|casa|vida/)) {
-        return {
-          texto: 'No momento não consigo consultar um valor exato para esse produto. Posso te encaminhar para uma cotação personalizada.',
-          botoes: [
-            { texto: 'Falar com consultor', rota: '/contato' }
-          ]
-        };
-      }
+    // 1. INTENÇÃO: PREÇO / PLANOS
+    if (txt.match(/preço|preco|valor|custa|custo|pago|pagar|plano|planos|essencial|completo|vip/)) {
       return {
-        texto: 'Claro! Você quer saber o preço de qual seguro?',
+        texto: 'Trabalhamos com 3 planos oficiais para o Seguro Auto da Seguraê:\n\n• Essencial: R$ 139/mês\n• Completo: R$ 199/mês\n• Premium VIP: R$ 279/mês\n\nOs valores podem variar conforme o perfil e as coberturas escolhidas.',
         botoes: [
-          { texto: '🚗 Auto', acao: () => processarTexto('quanto custa seguro auto') },
-          { texto: '🏠 Residencial', acao: () => processarTexto('quanto custa seguro residencial') },
-          { texto: '❤️ Vida', acao: () => processarTexto('quanto custa seguro vida') }
+          { texto: '🛡️ Ver detalhes', rota: '/coberturas' },
+          { texto: '🚗 Fazer cotação', rota: '/coberturas' },
+          { texto: '💬 Falar com consultor', rota: '/contato' }
         ]
       };
     }
@@ -78,7 +60,7 @@ export default function ChatbotFlutuante() {
     // 2. INTENÇÃO: COBERTURAS E CONDIÇÕES
     if (txt.match(/cobertura|cobre|condição|condicoes/)) {
       return {
-        texto: 'Para o Seguro Auto, as condições disponíveis são:\n\n• Essencial (Roubo e Furto)\n• Completo (Colisão e Terceiros)\n• Premium VIP (Proteção Total)\n\nOs valores e condições podem variar conforme o perfil e a cobertura escolhida.',
+        texto: 'Para o Seguro Auto, oferecemos opções completas divididas em nossos planos:\n\n• Essencial (R$ 139/mês): Proteção essencial para o dia a dia.\n• Completo (R$ 199/mês): Cobertura ampliada para colisão e terceiros.\n• Premium VIP (R$ 279/mês): Proteção total sem preocupações.',
         botoes: [
           { texto: 'Ver todas as coberturas', rota: '/coberturas' },
           { texto: 'Fazer cotação', rota: '/coberturas' }
@@ -89,7 +71,7 @@ export default function ChatbotFlutuante() {
     // 3. INTENÇÃO: FAQ / DÚVIDAS
     if (txt.match(/faq|dúvida|duvida|pergunta|frequente/)) {
       return {
-        texto: 'Essa informação não está disponível atualmente no projeto e precisa ser configurada.\n\nEnquanto isso, você pode falar diretamente com nossa equipe!',
+        texto: 'Se tiver dúvidas sobre os planos ou assistências, você pode falar diretamente com nossa equipe de atendimento!',
         botoes: [
           { texto: 'Falar conosco', rota: '/contato' }
         ]
@@ -99,7 +81,7 @@ export default function ChatbotFlutuante() {
     // 4. INTENÇÃO: CONTATO / ATENDIMENTO
     if (txt.match(/contato|falar|atendente|telefone|whatsapp|whats|email|e-mail|ajuda|vendedor/)) {
       return {
-        texto: 'Claro! Você pode falar com a Seguraê por:\n\n📱 WhatsApp: (11) 99999-9999\n📞 Telefone/Sinistro: 0800 700 8020\n📧 E-mail: suporte@segurae.com.br\n\nTambém posso te encaminhar para nossos canais.',
+        texto: 'Claro! Você pode falar com a Seguraê por:\n\n📱 WhatsApp: (11) 99999-9999\n📞 Telefone/Sinistro: 0800 700 8020\n📧 E-mail: suporte@segurae.com.br',
         botoes: [
           { texto: '💬 WhatsApp', link: 'https://wa.me/5511999999999' },
           { texto: '📞 Ligar', link: 'tel:08007008020' },
@@ -111,30 +93,19 @@ export default function ChatbotFlutuante() {
     // 5. INTENÇÃO: COTAÇÃO / CONTRATAÇÃO
     if (txt.match(/cotação|cotacao|contratar|orçamento|orcamento/)) {
       return {
-        texto: 'Perfeito! Posso te ajudar a iniciar uma cotação agora mesmo.',
+        texto: 'Perfeito! Posso te ajudar a iniciar uma cotação agora mesmo para escolher o seu plano ideal.',
         botoes: [
           { texto: '🚗 Fazer cotação', rota: '/coberturas' }
         ]
       };
     }
 
-    // 6. INTENÇÃO: PRODUTOS / SERVIÇOS
-    if (txt.match(/produto|seguro tem|quais seguros|serviço/)) {
-      return {
-        texto: 'Hoje a Seguraê oferece estas opções principais:\n\n🚗 Seguro Auto (Disponível agora)\n🏠 Seguro Residencial\n❤️ Seguro de Vida\n\nQual deles você gostaria de conhecer?',
-        botoes: [
-          { texto: 'Conhecer Seguro Auto', rota: '/coberturas' },
-          { texto: 'Outros serviços', rota: '/servicos' }
-        ]
-      };
-    }
-
-    // 7. SAUDAÇÃO
+    // 6. SAUDAÇÃO
     if (txt.match(/oi|olá|ola|bom dia|boa tarde|boa noite|tudo bem/)) {
       return {
-        texto: 'Olá! Como posso ajudar você hoje?',
+        texto: 'Olá! Como posso ajudar você hoje com o seu Seguro Auto?',
         botoes: [
-          { texto: '💰 Ver preços', acao: () => processarTexto('preços') },
+          { texto: '💰 Ver nossos planos', acao: () => processarTexto('planos') },
           { texto: '🛡️ Ver coberturas', acao: () => processarTexto('coberturas') }
         ]
       };
@@ -142,7 +113,7 @@ export default function ChatbotFlutuante() {
 
     // DEFAULT (Não entendeu / Não encontrou)
     return {
-      texto: 'Não encontrei essa informação nas opções disponíveis da Seguraê.\n\nPosso te encaminhar para nosso atendimento para confirmar essa possibilidade.',
+      texto: 'Não encontrei essa informação nas opções disponíveis da Seguraê.\n\nPosso te encaminhar para nosso atendimento para tirar suas dúvidas.',
       botoes: [
         { texto: 'Falar com atendente', rota: '/contato' }
       ]
@@ -150,7 +121,6 @@ export default function ChatbotFlutuante() {
   };
 
   const processarTexto = (textoBotao: string) => {
-    // Adiciona msg do usuário
     const novaMensagemUsuario: Mensagem = {
       id: Date.now(),
       texto: textoBotao,
@@ -158,7 +128,6 @@ export default function ChatbotFlutuante() {
     };
     setMensagens((prev) => [...prev, novaMensagemUsuario]);
     
-    // Inicia loading
     setIsTyping(true);
 
     setTimeout(() => {
@@ -171,7 +140,7 @@ export default function ChatbotFlutuante() {
       };
       setMensagens((prev) => [...prev, respostaMensagemBot]);
       setIsTyping(false);
-    }, 800 + Math.random() * 500); // tempo de digitação variável para parecer natural
+    }, 800 + Math.random() * 500);
   };
 
   const enviarMensagem = (e: React.FormEvent) => {
@@ -196,11 +165,9 @@ export default function ChatbotFlutuante() {
 
   return (
     <div className="fixed bottom-6 right-6 z-[9999]">
-      {/* Janela do Chat */}
       {isOpen && (
         <div className="absolute bottom-20 right-0 w-[90vw] sm:w-[380px] bg-white rounded-3xl shadow-2xl border border-zinc-200 overflow-hidden flex flex-col h-[550px] max-h-[80vh] animate-in fade-in zoom-in-95 duration-200">
           
-          {/* Cabeçalho do Chat */}
           <div className="bg-red-600 px-5 py-4 text-white flex items-center justify-between shadow-md z-10">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center backdrop-blur-sm">
@@ -208,7 +175,7 @@ export default function ChatbotFlutuante() {
               </div>
               <div>
                 <h3 className="font-bold text-sm tracking-tight flex items-center gap-2">
-                  Assistente Seguraê
+                  Assistente Segura<span className="text-white">ê</span>
                   <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
                 </h3>
                 <p className="text-[11px] text-white/90 font-medium">Estamos online</p>
@@ -223,7 +190,6 @@ export default function ChatbotFlutuante() {
             </button>
           </div>
 
-          {/* Corpo / Lista de Mensagens */}
           <div className="flex-1 p-4 bg-zinc-50 overflow-y-auto space-y-4 text-sm">
             {mensagens.map((msg) => (
               <div
@@ -240,7 +206,6 @@ export default function ChatbotFlutuante() {
                   {msg.texto}
                 </div>
                 
-                {/* Botões da Mensagem do Bot */}
                 {msg.botoes && msg.remetente === 'bot' && (
                   <div className="flex flex-wrap gap-2 mt-2 ml-1 max-w-[90%]">
                     {msg.botoes.map((botao, i) => (
@@ -269,7 +234,6 @@ export default function ChatbotFlutuante() {
             <div ref={messagesEndRef} />
           </div>
 
-          {/* Rodapé / Input de Envio */}
           <form onSubmit={enviarMensagem} className="p-3 bg-white border-t border-zinc-100 flex items-center gap-2">
             <input 
               type="text" 
@@ -291,7 +255,6 @@ export default function ChatbotFlutuante() {
         </div>
       )}
 
-      {/* Botão Flutuante Principal */}
       <button
         onClick={() => setIsOpen(!isOpen)}
         className="w-14 h-14 bg-red-600 hover:bg-red-700 text-white rounded-full shadow-2xl flex items-center justify-center transition-all duration-300 hover:scale-105 active:scale-95 cursor-pointer focus:outline-none focus:ring-4 focus:ring-red-600/30 group relative"

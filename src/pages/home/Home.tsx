@@ -449,7 +449,7 @@ export default function Home() {
                 {/* Botões de Ação */}
                 <div className="flex flex-col gap-2.5">
                   <a
-                    href={`https://wa.me/5511999999999?text=${encodeURIComponent(
+                    href={`https://wa.me/5511932876906?text=${encodeURIComponent(
                       `Olá! Realizei a simulação no site da Seguraê para o veículo ${resultadoSimulacao.modelo} (Ano ${resultadoSimulacao.anoVeiculo}, Placa ${resultadoSimulacao.placa}) no plano ${resultadoSimulacao.tipo} pelo valor de ${resultadoSimulacao.valorFinal.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}/mês${
                         resultadoSimulacao.temDesconto10Anos ? " (com desconto de 20% para veículos com 10+ anos)" : ""
                       }. Gostaria de prosseguir com a contratação!`

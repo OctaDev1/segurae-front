@@ -20,7 +20,7 @@ export default function EquipeSection() {
     const interval = setInterval(() => {
       if (teamCarouselRef.current) {
         const { scrollLeft, scrollWidth, clientWidth } = teamCarouselRef.current;
-        
+
         // Se chegou no final do carrossel, volta para o início (0). Se não, avança um pouco.
         if (scrollLeft + clientWidth >= scrollWidth - 10) {
           teamCarouselRef.current.scrollTo({ left: 0, behavior: 'smooth' });
@@ -36,7 +36,7 @@ export default function EquipeSection() {
   return (
     <section className="w-full bg-white py-24 px-6 lg:px-16 relative overflow-hidden border-t border-zinc-100">
       <div className="max-w-7xl mx-auto relative z-10">
-        
+
         {/* Cabeçalho da Seção */}
         <div className="flex flex-col md:flex-row justify-between items-end mb-12 gap-6">
           <div>
@@ -53,15 +53,15 @@ export default function EquipeSection() {
 
           {/* Botões de Navegação do Carrossel */}
           <div className="flex gap-3">
-            <button 
-              onClick={() => scroll(teamCarouselRef, 'left')} 
+            <button
+              onClick={() => scroll(teamCarouselRef, 'left')}
               className="p-3 bg-white border border-zinc-200 rounded-full text-zinc-700 hover:text-white hover:border-red-600 hover:bg-red-600 transition-all shadow-sm cursor-pointer"
               aria-label="Rolar para esquerda"
             >
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5"><polyline points="15 18 9 12 15 6"></polyline></svg>
             </button>
-            <button 
-              onClick={() => scroll(teamCarouselRef, 'right')} 
+            <button
+              onClick={() => scroll(teamCarouselRef, 'right')}
               className="p-3 bg-white border border-zinc-200 rounded-full text-zinc-700 hover:text-white hover:border-red-600 hover:bg-red-600 transition-all shadow-sm cursor-pointer"
               aria-label="Rolar para direita"
             >
@@ -71,34 +71,35 @@ export default function EquipeSection() {
         </div>
 
         {/* Carrossel de Cards da Equipe usando os dados */}
-        <div 
-          ref={teamCarouselRef} 
+        <div
+          ref={teamCarouselRef}
           className="flex overflow-x-auto snap-x snap-mandatory gap-6 pb-6 scroll-smooth [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] scrollbar-none"
         >
           {TEAM_MEMBERS.map((member, index) => (
-            <div 
-              key={index} 
-              className="snap-start shrink-0 w-full md:w-[calc(50%-12px)] lg:w-[calc(33.333%-16px)] bg-zinc-50 rounded-3xl border border-zinc-100 overflow-hidden shadow-lg shadow-zinc-100 flex flex-col justify-between"
+            <div
+              key={index}
+              className="snap-start shrink-0 w-full md:w-[calc(50%-12px)] lg:w-[calc(33.333%-16px)] bg-zinc-50 rounded-3xl border border-zinc-100 p-8 shadow-lg shadow-zinc-100 flex flex-col items-center text-center justify-between"
             >
-              <div className="h-64 w-full overflow-hidden bg-zinc-100">
-                <img 
-                  src={member.imageUrl} 
-                  alt={member.name} 
-                  className="w-full h-full object-contain transition-transform duration-300 hover:scale-105" 
-                />
-              </div>
-              <div className="p-8 flex flex-col justify-between grow">
-                <div>
-                  <span className="text-red-600 font-bold text-xs uppercase tracking-widest mb-1 block">
-                    {member.role}
-                  </span>
-                  <h3 className="text-xl font-bold text-zinc-900 mb-3">
-                    {member.name}
-                  </h3>
-                  <p className="text-zinc-600 text-sm leading-relaxed">
-                    {member.description}
-                  </p>
+              <div className="flex flex-col items-center w-full">
+                {/* Foto em formato de avatar circular grande: exibe o rosto inteiro sem cortes forçados */}
+                <div className="w-40 h-40 mb-6 rounded-full overflow-hidden bg-white border-4 border-white shadow-md shrink-0">
+                  <img
+                    src={member.imageUrl}
+                    alt={member.name}
+                    className="w-full h-full object-cover object-center"
+                    
+                  />
                 </div>
+
+                <span className="text-red-600 font-bold text-xs uppercase tracking-widest mb-1 block">
+                  {member.role}
+                </span>
+                <h3 className="text-xl font-bold text-zinc-900 mb-3">
+                  {member.name}
+                </h3>
+                <p className="text-zinc-600 text-sm leading-relaxed">
+                  {member.description}
+                </p>
               </div>
             </div>
           ))}
