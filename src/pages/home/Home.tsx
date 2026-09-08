@@ -131,9 +131,9 @@ export default function Home() {
   const temDesconto10Anos = !isNaN(anoNum) && anoNum > 1900 && (anoAtual - anoNum >= 10);
 
   const precosBase: Record<string, number> = {
-    "Premium": 279.90,
-    "Completo": 199.90,
-    "Essencial": 139.90,
+    "Premium": 4250.00,
+    "Completo": 2950.00,
+    "Essencial": 1850.00,
   };
 
   const handleSimular = (e: React.FormEvent) => {

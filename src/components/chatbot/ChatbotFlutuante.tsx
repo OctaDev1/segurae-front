@@ -48,7 +48,7 @@ export default function ChatbotFlutuante() {
     // 1. INTENÇÃO: PREÇO / PLANOS
     if (txt.match(/preço|preco|valor|custa|custo|pago|pagar|plano|planos|essencial|completo|vip/)) {
       return {
-        texto: 'Trabalhamos com 3 planos oficiais para o Seguro Auto da Seguraê:\n\n• Essencial: R$ 139/mês\n• Completo: R$ 199/mês\n• Premium VIP: R$ 279/mês\n\nOs valores podem variar conforme o perfil e as coberturas escolhidas.',
+        texto: 'Trabalhamos com 3 planos oficiais para o Seguro Auto da Seguraê:\n\n• Essencial: R$ 1850/mês\n• Completo: R$ 2950/mês\n• Premium VIP: R$ 4250/mês\n\nOs valores podem variar conforme o perfil e as coberturas escolhidas.',
         botoes: [
           { texto: '🛡️ Ver detalhes', rota: '/coberturas' },
           { texto: '🚗 Fazer cotação', rota: '/coberturas' },
@@ -60,7 +60,7 @@ export default function ChatbotFlutuante() {
     // 2. INTENÇÃO: COBERTURAS E CONDIÇÕES
     if (txt.match(/cobertura|cobre|condição|condicoes/)) {
       return {
-        texto: 'Para o Seguro Auto, oferecemos opções completas divididas em nossos planos:\n\n• Essencial (R$ 139/mês): Proteção essencial para o dia a dia.\n• Completo (R$ 199/mês): Cobertura ampliada para colisão e terceiros.\n• Premium VIP (R$ 279/mês): Proteção total sem preocupações.',
+        texto: 'Para o Seguro Auto, oferecemos opções completas divididas em nossos planos:\n\n• Essencial (R$ 1850/mês): Proteção essencial para o dia a dia.\n• Completo (R$ 2950/mês): Cobertura ampliada para colisão e terceiros.\n• Premium VIP (R$ 4250/mês): Proteção total sem preocupações.',
         botoes: [
           { texto: 'Ver todas as coberturas', rota: '/coberturas' },
           { texto: 'Fazer cotação', rota: '/coberturas' }
