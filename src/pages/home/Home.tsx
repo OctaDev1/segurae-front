@@ -325,7 +325,7 @@ export default function Home() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div className="flex flex-col gap-1.5">
                       <label className="text-[10px] font-bold text-zinc-700 uppercase tracking-widest">
-                        CEP de Pernoite
+                        CEP
                       </label>
                       <input
                         type="text"
