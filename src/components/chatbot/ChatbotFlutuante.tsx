@@ -1,8 +1,9 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 interface Botao {
   texto: string;
+  prompt?: string;
   acao?: () => void;
   rota?: string;
   link?: string;
@@ -15,114 +16,113 @@ interface Mensagem {
   botoes?: Botao[];
 }
 
+const processarIntencao = (texto: string): Omit<Mensagem, 'id' | 'remetente'> => {
+  const txt = texto.toLowerCase();
+
+  // 1. INTENÇÃO: PREÇO / PLANOS
+  if (txt.match(/preço|preco|valor|custa|custo|pago|pagar|plano|planos|essencial|completo|vip/)) {
+    return {
+      texto: 'Trabalhamos com 3 planos oficiais para o Seguro Auto da Seguraê:\n\n• Essencial: R$ 1850/mês\n• Completo: R$ 2950/mês\n• Premium VIP: R$ 4250/mês\n\nOs valores podem variar conforme o perfil e as coberturas escolhidas.',
+      botoes: [
+        { texto: '🛡️ Ver detalhes', rota: '/coberturas' },
+        { texto: '🚗 Fazer cotação', rota: '/coberturas' },
+        { texto: '💬 Falar com consultor', rota: '/contato' }
+      ]
+    };
+  }
+
+  // 2. INTENÇÃO: COBERTURAS E CONDIÇÕES
+  if (txt.match(/cobertura|cobre|condição|condicoes/)) {
+    return {
+      texto: 'Para o Seguro Auto, oferecemos opções completas divididas em nossos planos:\n\n• Essencial (R$ 1850/mês): Proteção essencial para o dia a dia.\n• Completo (R$ 2950/mês): Cobertura ampliada para colisão e terceiros.\n• Premium VIP (R$ 4250/mês): Proteção total sem preocupações.',
+      botoes: [
+        { texto: 'Ver todas as coberturas', rota: '/coberturas' },
+        { texto: 'Fazer cotação', rota: '/coberturas' }
+      ]
+    };
+  }
+
+  // 3. INTENÇÃO: FAQ / DÚVIDAS
+  if (txt.match(/faq|dúvida|duvida|pergunta|frequente/)) {
+    return {
+      texto: 'Se tiver dúvidas sobre os planos ou assistências, você pode falar diretamente com nossa equipe de atendimento!',
+      botoes: [
+        { texto: 'Falar conosco', rota: '/contato' }
+      ]
+    };
+  }
+
+  // 4. INTENÇÃO: CONTATO / ATENDIMENTO
+  if (txt.match(/contato|falar|atendente|telefone|whatsapp|whats|email|e-mail|ajuda|vendedor/)) {
+    return {
+      texto: 'Claro! Você pode falar com a Seguraê por:\n\n📱 WhatsApp: (11) 99999-9999\n📞 Telefone/Sinistro: 0800 700 8020\n📧 E-mail: suporte@segurae.com.br',
+      botoes: [
+        { texto: '💬 WhatsApp', link: 'https://wa.me/5511999999999' },
+        { texto: '📞 Ligar', link: 'tel:08007008020' },
+        { texto: '📧 E-mail', link: 'mailto:suporte@segurae.com.br' }
+      ]
+    };
+  }
+
+  // 5. INTENÇÃO: COTAÇÃO / CONTRATAÇÃO
+  if (txt.match(/cotação|cotacao|contratar|orçamento|orcamento/)) {
+    return {
+      texto: 'Perfeito! Posso te ajudar a iniciar uma cotação agora mesmo para escolher o seu plano ideal.',
+      botoes: [
+        { texto: '🚗 Fazer cotação', rota: '/coberturas' }
+      ]
+    };
+  }
+
+  // 6. SAUDAÇÃO
+  if (txt.match(/oi|olá|ola|bom dia|boa tarde|boa noite|tudo bem/)) {
+    return {
+      texto: 'Olá! Como posso ajudar você hoje com o seu Seguro Auto?',
+      botoes: [
+        { texto: '💰 Ver nossos planos', prompt: 'planos' },
+        { texto: '🛡️ Ver coberturas', prompt: 'coberturas' }
+      ]
+    };
+  }
+
+  // DEFAULT (Não entendeu / Não encontrou)
+  return {
+    texto: 'Não encontrei essa informação nas opções disponíveis da Seguraê.\n\nPosso te encaminhar para nosso atendimento para tirar suas dúvidas.',
+    botoes: [
+      { texto: 'Falar com atendente', rota: '/contato' }
+    ]
+  };
+};
+
+const SAUDACAO_INICIAL: Mensagem = {
+  id: 1,
+  texto: 'Olá! 👋\nSou o assistente virtual da Seguraê.\n\nPosso ajudar você a encontrar o plano de Seguro Auto ideal, consultar preços ou tirar suas dúvidas.\n\nComo posso ajudar?',
+  remetente: 'bot',
+  botoes: [
+    { texto: '💰 Nossos Planos', prompt: 'planos' },
+    { texto: '🛡️ Coberturas', prompt: 'coberturas' },
+    { texto: '💬 Falar conosco', prompt: 'contato' },
+    { texto: '🚗 Fazer cotação', rota: '/coberturas' }
+  ]
+};
+
 export default function ChatbotFlutuante() {
   const [isOpen, setIsOpen] = useState(false);
   const [inputTexto, setInputTexto] = useState('');
   const [isTyping, setIsTyping] = useState(false);
+  const [mensagens, setMensagens] = useState<Mensagem[]>([SAUDACAO_INICIAL]);
   const navigate = useNavigate();
   const messagesEndRef = useRef<HTMLDivElement>(null);
-
-  // Saudação inicial
-  const saudacaoInicial: Mensagem = {
-    id: 1,
-    texto: 'Olá! 👋\nSou o assistente virtual da Seguraê.\n\nPosso ajudar você a encontrar o plano de Seguro Auto ideal, consultar preços ou tirar suas dúvidas.\n\nComo posso ajudar?',
-    remetente: 'bot',
-    botoes: [
-      { texto: '💰 Nossos Planos', acao: () => processarTexto('planos') },
-      { texto: '🛡️ Coberturas', acao: () => processarTexto('coberturas') },
-      { texto: '💬 Falar conosco', acao: () => processarTexto('contato') },
-      { texto: '🚗 Fazer cotação', rota: '/coberturas' }
-    ]
-  };
-
-  const [mensagens, setMensagens] = useState<Mensagem[]>([saudacaoInicial]);
 
   // Rolar para o fim quando nova mensagem chegar
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [mensagens, isTyping]);
 
-  const processarIntencao = (texto: string): Omit<Mensagem, 'id' | 'remetente'> => {
-    const txt = texto.toLowerCase();
-
-    // 1. INTENÇÃO: PREÇO / PLANOS
-    if (txt.match(/preço|preco|valor|custa|custo|pago|pagar|plano|planos|essencial|completo|vip/)) {
-      return {
-        texto: 'Trabalhamos com 3 planos oficiais para o Seguro Auto da Seguraê:\n\n• Essencial: R$ 139/mês\n• Completo: R$ 199/mês\n• Premium VIP: R$ 279/mês\n\nOs valores podem variar conforme o perfil e as coberturas escolhidas.',
-        botoes: [
-          { texto: '🛡️ Ver detalhes', rota: '/coberturas' },
-          { texto: '🚗 Fazer cotação', rota: '/coberturas' },
-          { texto: '💬 Falar com consultor', rota: '/contato' }
-        ]
-      };
-    }
-
-    // 2. INTENÇÃO: COBERTURAS E CONDIÇÕES
-    if (txt.match(/cobertura|cobre|condição|condicoes/)) {
-      return {
-        texto: 'Para o Seguro Auto, oferecemos opções completas divididas em nossos planos:\n\n• Essencial (R$ 139/mês): Proteção essencial para o dia a dia.\n• Completo (R$ 199/mês): Cobertura ampliada para colisão e terceiros.\n• Premium VIP (R$ 279/mês): Proteção total sem preocupações.',
-        botoes: [
-          { texto: 'Ver todas as coberturas', rota: '/coberturas' },
-          { texto: 'Fazer cotação', rota: '/coberturas' }
-        ]
-      };
-    }
-
-    // 3. INTENÇÃO: FAQ / DÚVIDAS
-    if (txt.match(/faq|dúvida|duvida|pergunta|frequente/)) {
-      return {
-        texto: 'Se tiver dúvidas sobre os planos ou assistências, você pode falar diretamente com nossa equipe de atendimento!',
-        botoes: [
-          { texto: 'Falar conosco', rota: '/contato' }
-        ]
-      };
-    }
-
-    // 4. INTENÇÃO: CONTATO / ATENDIMENTO
-    if (txt.match(/contato|falar|atendente|telefone|whatsapp|whats|email|e-mail|ajuda|vendedor/)) {
-      return {
-        texto: 'Claro! Você pode falar com a Seguraê por:\n\n📱 WhatsApp: (11) 99999-9999\n📞 Telefone/Sinistro: 0800 700 8020\n📧 E-mail: suporte@segurae.com.br',
-        botoes: [
-          { texto: '💬 WhatsApp', link: 'https://wa.me/5511999999999' },
-          { texto: '📞 Ligar', link: 'tel:08007008020' },
-          { texto: '📧 E-mail', link: 'mailto:suporte@segurae.com.br' }
-        ]
-      };
-    }
-
-    // 5. INTENÇÃO: COTAÇÃO / CONTRATAÇÃO
-    if (txt.match(/cotação|cotacao|contratar|orçamento|orcamento/)) {
-      return {
-        texto: 'Perfeito! Posso te ajudar a iniciar uma cotação agora mesmo para escolher o seu plano ideal.',
-        botoes: [
-          { texto: '🚗 Fazer cotação', rota: '/coberturas' }
-        ]
-      };
-    }
-
-    // 6. SAUDAÇÃO
-    if (txt.match(/oi|olá|ola|bom dia|boa tarde|boa noite|tudo bem/)) {
-      return {
-        texto: 'Olá! Como posso ajudar você hoje com o seu Seguro Auto?',
-        botoes: [
-          { texto: '💰 Ver nossos planos', acao: () => processarTexto('planos') },
-          { texto: '🛡️ Ver coberturas', acao: () => processarTexto('coberturas') }
-        ]
-      };
-    }
-
-    // DEFAULT (Não entendeu / Não encontrou)
-    return {
-      texto: 'Não encontrei essa informação nas opções disponíveis da Seguraê.\n\nPosso te encaminhar para nosso atendimento para tirar suas dúvidas.',
-      botoes: [
-        { texto: 'Falar com atendente', rota: '/contato' }
-      ]
-    };
-  };
-
-  const processarTexto = (textoBotao: string) => {
+  const processarTexto = useCallback((textoBotao: string) => {
+    const timestamp = Date.now();
     const novaMensagemUsuario: Mensagem = {
-      id: Date.now(),
+      id: timestamp,
       texto: textoBotao,
       remetente: 'usuario',
     };
@@ -130,18 +130,19 @@ export default function ChatbotFlutuante() {
     
     setIsTyping(true);
 
+    const delay = 800 + Math.floor(Math.random() * 500);
     setTimeout(() => {
       const resposta = processarIntencao(textoBotao);
       const respostaMensagemBot: Mensagem = {
-        id: Date.now() + 1,
+        id: timestamp + 1,
         texto: resposta.texto,
         botoes: resposta.botoes,
         remetente: 'bot',
       };
       setMensagens((prev) => [...prev, respostaMensagemBot]);
       setIsTyping(false);
-    }, 800 + Math.random() * 500);
-  };
+    }, delay);
+  }, []);
 
   const enviarMensagem = (e: React.FormEvent) => {
     e.preventDefault();
@@ -153,7 +154,9 @@ export default function ChatbotFlutuante() {
   };
 
   const executarAcaoBotao = (botao: Botao) => {
-    if (botao.acao) {
+    if (botao.prompt) {
+      processarTexto(botao.prompt);
+    } else if (botao.acao) {
       botao.acao();
     } else if (botao.rota) {
       setIsOpen(false);

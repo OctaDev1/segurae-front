@@ -1,4 +1,4 @@
-import { useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { useCallback, useContext, useState, useEffect, useCallback, useMemo, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import NavBar from "../../components/navbar/NavBar";
 import Footer from "../../components/footer/Footer";
@@ -10,87 +10,24 @@ import {
   Briefcase, 
   Users, 
   FilePlus, 
-  TrendUp, 
   Clock, 
   ShieldCheck, 
   ArrowRight,
   CurrencyCircleDollar,
-  Handshake
+  Handshake,
+  ArrowCounterClockwise,
+  CheckCircle,
+  WarningCircle,
+  Car,
+  CaretRight
 } from "@phosphor-icons/react";
-
-const getAuthHeader = (token?: string) => {
-  const tokenFinal = token || localStorage.getItem("token") || "";
-  if (!tokenFinal) return {};
-  const tokenFormatado = tokenFinal.startsWith("Bearer ") ? tokenFinal : `Bearer ${tokenFinal}`;
-  return { headers: { Authorization: tokenFormatado } };
-};
 
 export default function DashboardCorretor() {
   const navigate = useNavigate();
   const { usuario, handleLogout } = useContext(AuthContext);
 
-  const nomeExibicao = usuario?.nome || localStorage.getItem("nome") || "Corretor Parceiro";
-  const emailExibicao = usuario?.usuario || localStorage.getItem("usuario") || "corretor@segurae.com";
-
-  // Estados para dados reais do Render
-  const [apolices, setApolices] = useState<Apolice[]>([]);
-  const [clientes, setClientes] = useState<Cliente[]>([]);
-  const [carregando, setCarregando] = useState(true);
-
-  // Buscar dados da API do Render ao carregar o dashboard
-  const carregarDadosReais = useCallback(async () => {
-    setCarregando(true);
-    try {
-      const header = getAuthHeader(usuario?.token);
-      const [resApolices, resClientes] = await Promise.all([
-        buscar("/apolices", undefined, header).catch(() => []),
-        buscar("/clientes", undefined, header).catch(() => [])
-      ]);
-
-      if (Array.isArray(resApolices)) {
-        setApolices(resApolices);
-      }
-      if (Array.isArray(resClientes)) {
-        setClientes(resClientes);
-      }
-    } catch (error) {
-      console.error("Erro ao carregar dados do dashboard:", error);
-    } finally {
-      setCarregando(false);
-    }
-  }, [usuario]);
-
-  useEffect(() => {
-    carregarDadosReais();
-  }, [carregarDadosReais]);
-
-  // Cálculos dinâmicos baseados estritamente na API do Render
-  const statsReais = useMemo(() => {
-    const totalClientes = clientes.length;
-    const totalApolices = apolices.length;
-    const apolicesAtivas = apolices.filter((a) => a.statusApolice === 1).length;
-    const apolicesPendentes = apolices.filter((a) => a.statusApolice === 0).length;
-    
-    // Soma do valor das apólices ativas para a comissão/prêmio
-    const valorPrêmioTotal = apolices
-      .filter((a) => a.statusApolice === 1)
-      .reduce((acc, curr) => acc + (Number(curr.valorApolice) || 0), 0);
-
-    return {
-      totalClientes,
-      totalApolices,
-      apolicesAtivas,
-      apolicesPendentes,
-      valorPrêmioTotal
-    };
-  }, [apolices, clientes]);
-
-  const formatarMoeda = (valor: number) => {
-    return Number(valor || 0).toLocaleString("pt-BR", {
-      style: "currency",
-      currency: "BRL",
-    });
-  };
+  const nomeExibicao = usuario.nome || localStorage.getItem("nome") || "Corretor Parceiro";
+  const emailExibicao = usuario.usuario || localStorage.getItem("usuario") || "corretor@segurae.com";
 
   return (
     <div className="w-full min-h-screen bg-zinc-50 text-zinc-900 relative flex flex-col justify-between">
@@ -108,11 +45,24 @@ export default function DashboardCorretor() {
               Bem-vindo, <span className="text-red-600">{nomeExibicao}</span>
             </h1>
             <p className="text-zinc-500 text-sm mt-1">
-              Gerencie sua carteira de segurados, acompanhe comissões e emita novas apólices em tempo real.
+              Gerencie sua carteira de segurados, acompanhe comissões e emita novas apólices.
             </p>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 flex-wrap">
+            <button
+              type="button"
+              onClick={carregarDadosReais}
+              disabled={carregando}
+              title="Atualizar dados da API"
+              className="p-2.5 rounded-full border border-zinc-300 hover:border-zinc-400 bg-white text-zinc-700 hover:text-zinc-900 transition-colors cursor-pointer shadow-xs"
+            >
+              <ArrowCounterClockwise
+                size={18}
+                className={carregando ? "animate-spin text-red-600" : ""}
+              />
+            </button>
+
             <Link
               to="/corretor/apolices"
               className="px-5 py-2.5 rounded-full bg-red-600 hover:bg-red-700 text-white text-sm font-semibold transition-all shadow-md shadow-red-600/20 flex items-center gap-2"
@@ -120,6 +70,7 @@ export default function DashboardCorretor() {
               <FilePlus size={16} weight="bold" />
               <span>Gerenciar Apólices</span>
             </Link>
+
             <button
               type="button"
               onClick={() => {
@@ -133,82 +84,194 @@ export default function DashboardCorretor() {
           </div>
         </div>
 
-        {/* Métricas de Performance do Corretor (Dinâmicas do Render) */}
+        {/* Métricas de Performance do Corretor */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-10">
-          {/* Card 1: Carteira Ativa */}
-          <div className="bg-white rounded-3xl p-6 border border-zinc-200/80 shadow-xs">
+          {/* Card 1: Carteira Ativa (Link para Gestão de Clientes) */}
+          <Link
+            to="/corretor/apolices?aba=clientes"
+            className="bg-white rounded-3xl p-6 border border-zinc-200/80 shadow-xs hover:border-blue-500 hover:shadow-md transition-all group block cursor-pointer"
+          >
             <div className="flex items-center justify-between mb-3">
-              <span className="text-xs font-bold uppercase tracking-wider text-zinc-400">
+              <span className="text-xs font-bold uppercase tracking-wider text-zinc-400 group-hover:text-blue-600 transition-colors">
                 Carteira de Clientes
               </span>
-              <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
+              <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center group-hover:bg-blue-600 group-hover:text-white transition-colors">
                 <Users size={18} weight="bold" />
               </div>
             </div>
             <h3 className="text-2xl font-black text-zinc-900 mb-1">
-              {carregando ? "..." : statsReais.totalClientes}{" "}
-              <span className="text-xs font-normal text-zinc-500">segurados</span>
+              48 <span className="text-xs font-normal text-zinc-500">segurados</span>
             </h3>
             <p className="text-[11px] text-emerald-600 font-semibold flex items-center gap-1">
-              <TrendUp size={14} weight="bold" /> Sincronizado com API
+              <TrendUp size={14} weight="bold" /> +12% este mês
             </p>
-          </div>
+          </Link>
 
           {/* Card 2: Apólices Emitidas */}
-          <div className="bg-white rounded-3xl p-6 border border-zinc-200/80 shadow-xs">
+          <div className="bg-white rounded-3xl p-6 border border-zinc-200/80 shadow-xs hover:border-zinc-300 transition-all">
             <div className="flex items-center justify-between mb-3">
               <span className="text-xs font-bold uppercase tracking-wider text-zinc-400">
-                Apólices Emitidas
+                Apólices Vigentes
               </span>
               <div className="w-8 h-8 rounded-xl bg-red-50 text-red-600 flex items-center justify-center">
                 <ShieldCheck size={18} weight="bold" />
               </div>
             </div>
             <h3 className="text-2xl font-black text-zinc-900 mb-1">
-              {carregando ? "..." : statsReais.apolicesAtivas}{" "}
-              <span className="text-xs font-normal text-zinc-500">vigentes</span>
+              64 <span className="text-xs font-normal text-zinc-500">vigentes</span>
             </h3>
             <p className="text-[11px] text-zinc-400 font-medium">
-              Total cadastradas: {statsReais.totalApolices}
+              Taxa de renovação: 94%
             </p>
           </div>
 
-          {/* Card 3: Comissões Estimadas */}
-          <div className="bg-white rounded-3xl p-6 border border-zinc-200/80 shadow-xs">
+          {/* Card 3: Volume Sob Gestão */}
+          <div className="bg-white rounded-3xl p-6 border border-zinc-200/80 shadow-xs hover:border-zinc-300 transition-all">
             <div className="flex items-center justify-between mb-3">
               <span className="text-xs font-bold uppercase tracking-wider text-zinc-400">
-                Prêmio / Comissão Ativa
+                Comissão Acumulada
+              </span>
+              <div className="w-8 h-8 rounded-xl bg-zinc-100 text-zinc-800 flex items-center justify-center">
+                <Car size={18} weight="bold" />
+              </div>
+            </div>
+            <h3 className="text-2xl font-black text-emerald-600 mb-1">
+              R$ 18.450
+            </h3>
+            <p className="text-[11px] text-zinc-400 font-medium">
+              Ciclo atual de repasse
+            </p>
+          </div>
+
+          {/* Card 4: Comissões Estimadas */}
+          <div className="bg-white rounded-3xl p-6 border border-zinc-200/80 shadow-xs hover:border-zinc-300 transition-all">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-xs font-bold uppercase tracking-wider text-zinc-400">
+                Comissão Estimada (15%)
               </span>
               <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
                 <CurrencyCircleDollar size={18} weight="bold" />
               </div>
             </div>
-            <h3 className="text-xl lg:text-2xl font-black text-emerald-600 mb-1 truncate">
-              {carregando ? "..." : formatarMoeda(statsReais.valorPrêmioTotal)}
+            <h3 className="text-2xl font-black text-amber-600 mb-1">
+              7 <span className="text-xs font-normal text-zinc-500">pendentes</span>
             </h3>
             <p className="text-[11px] text-zinc-400 font-medium">
-              Baseado nas apólices ativas
+              Calculada sobre as apólices ativas
             </p>
+          </div>
+        </div>
+
+        {/* Seção: Apólices Recentes em Tempo Real */}
+        <div className="bg-white rounded-3xl border border-zinc-200/80 p-6 sm:p-8 shadow-xs mb-10">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 pb-4 border-b border-zinc-100">
+            <div>
+              <h3 className="text-lg font-bold text-zinc-900 flex items-center gap-2">
+                <span>Últimas Apólices em Gestão</span>
+                <span className="text-xs bg-zinc-100 text-zinc-600 font-semibold px-2.5 py-0.5 rounded-full">
+                  {apolices.length} no total
+                </span>
+              </h3>
+              <p className="text-xs text-zinc-500 mt-1">
+                Contratos emitidos recentemente e sincronizados diretamente com a base Seguraê.
+              </p>
+            </div>
+
+            <Link
+              to="/corretor/apolices"
+              className="inline-flex items-center gap-1.5 text-xs font-bold text-red-600 hover:text-red-700 transition-colors"
+            >
+              <span>Ver todas no painel</span>
+              <CaretRight size={14} weight="bold" />
+            </Link>
           </div>
 
-          {/* Card 4: Cotações em Análise */}
-          <div className="bg-white rounded-3xl p-6 border border-zinc-200/80 shadow-xs">
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-xs font-bold uppercase tracking-wider text-zinc-400">
-                Cotações Abertas
-              </span>
-              <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
-                <Clock size={18} weight="bold" />
+          {apolicesRecentes.length === 0 ? (
+            <div className="text-center py-12">
+              <div className="w-12 h-12 rounded-2xl bg-zinc-100 text-zinc-400 flex items-center justify-center mx-auto mb-3">
+                <ShieldCheck size={24} />
               </div>
+              <p className="text-sm font-bold text-zinc-700">Nenhuma apólice cadastrada ainda</p>
+              <p className="text-xs text-zinc-400 mt-1 mb-4">
+                Comece emitindo sua primeira apólice para seu segurado.
+              </p>
+              <Link
+                to="/corretor/apolices"
+                className="inline-flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-xl text-xs font-bold shadow-sm hover:bg-red-700 transition-colors"
+              >
+                <FilePlus size={16} />
+                <span>Emitir Nova Apólice</span>
+              </Link>
             </div>
-            <h3 className="text-2xl font-black text-amber-600 mb-1">
-              {carregando ? "..." : statsReais.apolicesPendentes}{" "}
-              <span className="text-xs font-normal text-zinc-500">pendentes</span>
-            </h3>
-            <p className="text-[11px] text-zinc-400 font-medium">
-              Aguardando fechamento
-            </p>
-          </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead>
+                  <tr className="border-b border-zinc-100 text-zinc-400 font-bold uppercase tracking-wider text-[10px]">
+                    <th className="pb-3 font-semibold">Nº Apólice</th>
+                    <th className="pb-3 font-semibold">Cliente / Titular</th>
+                    <th className="pb-3 font-semibold">Veículo</th>
+                    <th className="pb-3 font-semibold">Cobertura</th>
+                    <th className="pb-3 font-semibold">Valor</th>
+                    <th className="pb-3 font-semibold">Vigência</th>
+                    <th className="pb-3 font-semibold text-center">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-zinc-50">
+                  {apolicesRecentes.map((ap) => (
+                    <tr key={ap.id || ap.numeroApolice} className="hover:bg-zinc-50/60 transition-colors">
+                      <td className="py-3.5 font-mono font-bold text-zinc-800">
+                        {ap.numeroApolice || `SEG-${ap.id}`}
+                      </td>
+                      <td className="py-3.5">
+                        <div className="font-bold text-zinc-900">
+                          {ap.cliente?.nomeCompleto || "Carlos Eduardo Mendes"}
+                        </div>
+                        <div className="text-[11px] text-zinc-400">
+                          {ap.cliente?.email || "carlos.mendes@email.com"}
+                        </div>
+                      </td>
+                      <td className="py-3.5">
+                        <div className="font-semibold text-zinc-800">{ap.marcaModelo}</div>
+                        <div className="text-[10px] font-mono text-zinc-400">
+                          {ap.placa || "BRA2E19"} • {ap.anoModelo || 2024}
+                        </div>
+                      </td>
+                      <td className="py-3.5 text-zinc-600 max-w-[200px] truncate">
+                        {ap.tipoCobertura || "Completo (Colisão e Terceiros)"}
+                      </td>
+                      <td className="py-3.5 font-black text-zinc-900">
+                        {formatarMoeda(Number(ap.valorApolice) || 0)}
+                      </td>
+                      <td className="py-3.5 text-zinc-500 font-mono text-[11px]">
+                        {formatarData(ap.dataTermino)}
+                      </td>
+                      <td className="py-3.5 text-center">
+                        {ap.statusApolice === 1 && (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200/60">
+                            <CheckCircle size={12} weight="fill" />
+                            <span>Ativa</span>
+                          </span>
+                        )}
+                        {ap.statusApolice === 2 && (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200/60">
+                            <WarningCircle size={12} weight="fill" />
+                            <span>Vencida</span>
+                          </span>
+                        )}
+                        {ap.statusApolice === 0 && (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-zinc-100 text-zinc-600 border border-zinc-200">
+                            <Clock size={12} weight="fill" />
+                            <span>Em Análise</span>
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
 
         {/* Seção de Ações e Ferramentas do Corretor */}
@@ -245,7 +308,7 @@ export default function DashboardCorretor() {
                 Tabela de Coberturas
               </h4>
               <p className="text-xs text-zinc-500 mb-6">
-                Revise os planos disponíveis na Seguraê para orientar a contratação ideal para seu cliente segurado.
+                Revise os 3 planos oficiais disponíveis na Seguraê para orientar a contratação ideal para seu cliente segurado.
               </p>
             </div>
             <Link

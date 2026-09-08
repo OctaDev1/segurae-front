@@ -16,6 +16,17 @@ api.interceptors.request.use((config) => {
   }
   return config;
 });
+// Função utilitária para normalizar o cabeçalho de autenticação
+export const getAuthHeaders = (token?: string) => {
+  const tokenFinal = token || localStorage.getItem("token") || "";
+  if (!tokenFinal.trim()) return {};
+  const formattedToken = tokenFinal.startsWith("Bearer ") ? tokenFinal : `Bearer ${tokenFinal}`;
+  return {
+    headers: {
+      Authorization: formattedToken,
+    },
+  };
+};
 
 // Função Cadastrar Usuário
 export const cadastrarUsuario = async <T = unknown>(url: string, dados: object, setDados?: (dados: T) => void) => {

@@ -9,7 +9,7 @@ export default function Coberturas() {
     {
       id: "essencial",
       nome: "Essencial (Roubo e Furto)",
-      preco: "R$ 139/mês",
+      preco: "R$ 1850/mês",
       descricao: "Proteção básica e fundamental para garantir que você não perca seu patrimônio para a criminalidade.",
       badge: "Mais Econômico",
       beneficios: [
@@ -23,7 +23,7 @@ export default function Coberturas() {
     {
       id: "completo",
       nome: "Completo (Colisão e Terceiros)",
-      preco: "R$ 199/mês",
+      preco: "R$ 2950/mês",
       descricao: "A escolha favorita dos motoristas. Amparo total contra imprevistos do dia a dia, batidas e danos materiais a outros.",
       badge: "Mais Popular",
       destacado: true,
@@ -39,7 +39,7 @@ export default function Coberturas() {
     {
       id: "premium",
       nome: "Premium VIP (Proteção Total)",
-      preco: "R$ 279/mês",
+      preco: "R$ 4250/mês",
       descricao: "Cobertura de alto padrão para quem busca zero preocupação e benefícios exclusivos na estrada.",
       badge: "Máxima Proteção",
       beneficios: [

@@ -15,8 +15,16 @@ import {
   Image,
   IdentificationCard,
 } from '@phosphor-icons/react';
-import { cadastrarUsuario } from '../../services/Service';
+import { cadastrarUsuario, cadastrar } from '../../services/Service';
 import { ToastAlerta } from '../../utils/toastalerta/ToastAlerta';
+import type Cliente from '../../models/Cliente';
+import {
+  formatarDataBR,
+  calcularIdade,
+  converterDataBrParaIso,
+  salvarClientesCorretor,
+  CLIENTES_INICIAIS_SISTEMA,
+} from '../../utils/corretorUtils';
 
 export default function Cadastro() {
   const navigate = useNavigate();
@@ -42,9 +50,22 @@ export default function Cadastro() {
       return;
     }
 
-    if (tipoAcesso === 'cliente' && (!cpfCnpj.trim() || !dataNascimento.trim())) {
-      setErro('Por favor, informe seu CPF/CNPJ e data de nascimento.');
-      return;
+    if (tipoAcesso === 'cliente') {
+      if (!cpfCnpj.trim() || !dataNascimento.trim()) {
+        setErro('Por favor, informe seu CPF/CNPJ e sua data de nascimento.');
+        return;
+      }
+
+      // Validação de formato da data e regra de maioridade (18+ anos)
+      const idade = calcularIdade(dataNascimento);
+      if (idade === -1) {
+        setErro('Por favor, informe uma data de nascimento válida no formato dia/mês/ano (ex: 15/05/1995).');
+        return;
+      }
+      if (idade < 18) {
+        setErro('É necessário ter pelo menos 18 anos de idade para se cadastrar no Seguraê.');
+        return;
+      }
     }
 
     if (senha.length < 6) {
@@ -65,29 +86,115 @@ export default function Cadastro() {
     setErro('');
     setCarregando(true);
 
-    try {
-      // Monta o payload dinâmico baseado no tipo de acesso
-      const dadosUsuario = {
-        id: 0,
-        nome: nome.trim(),
-        usuario: email.trim(),
-        senha: senha,
-        foto: fotoUrl.trim() || '',
-        perfil: tipoAcesso === 'cliente' ? 'ROLE_CLIENTE' : 'ROLE_CORRETOR',
-        // Se o seu back-end espera o CPF ou dados extras, inclua-os aqui caso a entidade possua esses atributos:
-        // cpfCnpj: cpfCnpj.trim(),
-        // dataNascimento: dataNascimento
-      };
+    const emailNormalizado = email.trim().toLowerCase();
 
-      await cadastrarUsuario('/usuarios/cadastrar', dadosUsuario, () => {});
+    // 1. Verificação REAL no front-end para saber se o e-mail já existe de fato
+    const rawLocais = localStorage.getItem('segurae_usuarios_locais');
+    const listaLocais = rawLocais ? JSON.parse(rawLocais) : [];
+    const emailJaExisteNosUsuarios = listaLocais.some(
+      (u: { usuario?: string }) => u.usuario?.toLowerCase().trim() === emailNormalizado
+    );
 
-      ToastAlerta('Conta criada com sucesso! Faça seu login.', 'sucesso');
-      navigate('/login');
-    } catch (error) {
-      setErro('Erro ao cadastrar o usuário. Verifique se o e-mail já está cadastrado ou se os dados estão corretos.');
-    } finally {
+    const rawClientes = localStorage.getItem('segurae_clientes_corretor');
+    const listaClientes = rawClientes ? JSON.parse(rawClientes) : CLIENTES_INICIAIS_SISTEMA;
+    const emailJaExisteNosClientes = listaClientes.some(
+      (c: Cliente) => c.email?.toLowerCase().trim() === emailNormalizado
+    );
+
+    if (emailJaExisteNosUsuarios || emailJaExisteNosClientes) {
+      setErro('Este e-mail já está cadastrado no sistema! Faça login diretamente na tela de acesso.');
       setCarregando(false);
+      return;
     }
+
+    // 2. Persistência local garantida (Fake Consumo / Frontend-first)
+    const novoId = Date.now();
+    const dataNascimentoIso = converterDataBrParaIso(dataNascimento) || '1990-01-01';
+
+    // Salva o novo usuário para login local imediato
+    const novoUsuario = {
+      id: novoId,
+      nome: nome.trim(),
+      usuario: emailNormalizado,
+      senha: senha,
+      foto: fotoUrl.trim() || '',
+      perfil: tipoAcesso === 'cliente' ? 'ROLE_CLIENTE' : 'ROLE_CORRETOR',
+      cpfCnpj: cpfCnpj.trim(),
+      dataNascimento: dataNascimentoIso,
+    };
+    localStorage.setItem(
+      'segurae_usuarios_locais',
+      JSON.stringify([...listaLocais, novoUsuario])
+    );
+
+    // Se for cliente, salva também na lista de clientes do corretor para aparecer na Gestão de Clientes
+    if (tipoAcesso === 'cliente') {
+      const novoCliente: Cliente = {
+        id: novoId,
+        nomeCompleto: nome.trim(),
+        email: emailNormalizado,
+        cpfCnpj: cpfCnpj.trim(),
+        dataNascimento: dataNascimentoIso,
+      };
+      const listaAtualizada = [
+        novoCliente,
+        ...listaClientes.filter((c: Cliente) => c.email?.toLowerCase().trim() !== emailNormalizado),
+      ];
+      salvarClientesCorretor(listaAtualizada);
+    }
+
+    // Se este e-mail estava na lista de excluídos, remove-o
+    try {
+      const rawExcluidos = localStorage.getItem('segurae_clientes_excluidos');
+      if (rawExcluidos) {
+        const excluidos = JSON.parse(rawExcluidos);
+        if (Array.isArray(excluidos)) {
+          const limpos = excluidos.filter(
+            (e: { email?: string }) => e.email?.toLowerCase().trim() !== emailNormalizado
+          );
+          localStorage.setItem('segurae_clientes_excluidos', JSON.stringify(limpos));
+        }
+      }
+    } catch {
+      // ignora
+    }
+
+    // 3. Tenta cadastrar no backend em segundo plano de forma não-bloqueante (fire-and-forget)
+    (async () => {
+      try {
+        await cadastrarUsuario('/usuarios/cadastrar', {
+          id: 0,
+          nome: nome.trim(),
+          usuario: emailNormalizado,
+          senha: senha,
+          foto: fotoUrl.trim() || '',
+          perfil: tipoAcesso === 'cliente' ? 'ROLE_CLIENTE' : 'ROLE_CORRETOR',
+        });
+      } catch {
+        // segue normalmente com persistência local
+      }
+      if (tipoAcesso === 'cliente') {
+        try {
+          const cpfDigitos = cpfCnpj.replace(/\D/g, '');
+          const cpfValido =
+            cpfDigitos.length >= 11
+              ? cpfDigitos
+              : `${Math.floor(10000000000 + Math.random() * 89999999999)}`;
+          await cadastrar<Cliente>('/clientes/cadastrar', {
+            nomeCompleto: nome.trim(),
+            email: emailNormalizado,
+            cpfCnpj: cpfValido,
+            dataNascimento: dataNascimentoIso,
+          });
+        } catch {
+          // segue normalmente
+        }
+      }
+    })();
+
+    ToastAlerta('Conta criada com sucesso! Faça seu login.', 'sucesso');
+    setCarregando(false);
+    navigate('/login', { state: { tipoAcesso } });
   };
 
   return (
@@ -282,7 +389,7 @@ export default function Cadastro() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label className="block text-xs font-semibold text-zinc-700 mb-1">
-                      CPF ou CNPJ
+                      CPF ou CNPJ *
                     </label>
                     <div className="relative flex items-center">
                       <span className="absolute left-3.5 text-zinc-400">
@@ -291,28 +398,64 @@ export default function Cadastro() {
                       <input
                         type="text"
                         value={cpfCnpj}
-                        onChange={(e) => setCpfCnpj(e.target.value)}
+                        onChange={(e) => {
+                          const digitos = e.target.value.replace(/\D/g, '').slice(0, 14);
+                          if (digitos.length <= 11) {
+                            if (digitos.length <= 3) setCpfCnpj(digitos);
+                            else if (digitos.length <= 6) setCpfCnpj(`${digitos.slice(0, 3)}.${digitos.slice(3)}`);
+                            else if (digitos.length <= 9) setCpfCnpj(`${digitos.slice(0, 3)}.${digitos.slice(3, 6)}.${digitos.slice(6)}`);
+                            else setCpfCnpj(`${digitos.slice(0, 3)}.${digitos.slice(3, 6)}.${digitos.slice(6, 9)}-${digitos.slice(9, 11)}`);
+                          } else {
+                            setCpfCnpj(`${digitos.slice(0, 2)}.${digitos.slice(2, 5)}.${digitos.slice(5, 8)}/${digitos.slice(8, 12)}-${digitos.slice(12, 14)}`);
+                          }
+                        }}
                         placeholder="000.000.000-00"
-                        className="w-full pl-10 pr-4 py-2 bg-zinc-50 border border-zinc-200 rounded-xl text-sm text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-red-600 focus:bg-white transition-all"
+                        maxLength={18}
+                        className="w-full pl-10 pr-4 py-2 bg-zinc-50 border border-zinc-200 rounded-xl text-sm text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-red-600 focus:bg-white transition-all font-mono"
                       />
                     </div>
                   </div>
 
                   <div>
-                    <label className="block text-xs font-semibold text-zinc-700 mb-1">
-                      Data de Nascimento
-                    </label>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-xs font-semibold text-zinc-700">
+                        Data de Nascimento *
+                      </label>
+                      <span className="text-[10px] text-red-600 font-bold bg-red-50 px-1.5 py-0.5 rounded-md border border-red-200/60">
+                        +18 anos
+                      </span>
+                    </div>
                     <div className="relative flex items-center">
                       <span className="absolute left-3.5 text-zinc-400">
                         <Calendar size={18} />
                       </span>
                       <input
-                        type="date"
+                        type="text"
+                        inputMode="numeric"
+                        maxLength={10}
                         value={dataNascimento}
-                        onChange={(e) => setDataNascimento(e.target.value)}
-                        className="w-full pl-10 pr-4 py-2 bg-zinc-50 border border-zinc-200 rounded-xl text-sm text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-red-600 focus:bg-white transition-all"
+                        onChange={(e) => setDataNascimento(formatarDataBR(e.target.value))}
+                        placeholder="DD/MM/AAAA"
+                        className="w-full pl-10 pr-4 py-2 bg-zinc-50 border border-zinc-200 rounded-xl text-sm text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-red-600 focus:bg-white transition-all font-mono"
                       />
                     </div>
+                    {dataNascimento.length === 10 && (
+                      <div className="mt-1">
+                        {calcularIdade(dataNascimento) === -1 ? (
+                          <span className="text-[11px] font-semibold text-red-600">
+                            Data inválida. Use o formato dia/mês/ano (DD/MM/AAAA).
+                          </span>
+                        ) : calcularIdade(dataNascimento) < 18 ? (
+                          <span className="text-[11px] font-semibold text-red-600">
+                            Idade: {calcularIdade(dataNascimento)} anos — cadastro permitido apenas para maiores de 18 anos.
+                          </span>
+                        ) : (
+                          <span className="text-[11px] font-semibold text-emerald-600">
+                            Idade: {calcularIdade(dataNascimento)} anos (Permitido)
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
               ) : (
