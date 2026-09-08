@@ -164,9 +164,9 @@ export default function ChatbotFlutuante() {
   };
 
   return (
-    <div className="fixed bottom-6 right-6 z-[9999]">
+    <div className="fixed bottom-6 right-6 z-9999">
       {isOpen && (
-        <div className="absolute bottom-20 right-0 w-[90vw] sm:w-[380px] bg-white rounded-3xl shadow-2xl border border-zinc-200 overflow-hidden flex flex-col h-[550px] max-h-[80vh] animate-in fade-in zoom-in-95 duration-200">
+        <div className="absolute bottom-20 right-0 w-[90vw] sm:w-95 bg-white rounded-3xl shadow-2xl border border-zinc-200 overflow-hidden flex flex-col h-137.5 max-h-[80vh] animate-in fade-in zoom-in-95 duration-200">
           
           <div className="bg-red-600 px-5 py-4 text-white flex items-center justify-between shadow-md z-10">
             <div className="flex items-center gap-3">
@@ -175,7 +175,7 @@ export default function ChatbotFlutuante() {
               </div>
               <div>
                 <h3 className="font-bold text-sm tracking-tight flex items-center gap-2">
-                  Assistente Segura<span className="text-white">ê</span>
+                  Assistente Seguraê<span className="text-white"></span>
                   <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
                 </h3>
                 <p className="text-[11px] text-white/90 font-medium">Estamos online</p>
