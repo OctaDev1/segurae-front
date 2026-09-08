@@ -14,6 +14,7 @@ import {
   CheckCircle,
   WarningCircle,
   ArrowSquareOut,
+  ArrowLeft,
 } from '@phosphor-icons/react';
 import { AuthContext } from '../../contexts/AuthContext';
 import type Apolice from '../../models/Apolice';
@@ -146,7 +147,7 @@ export default function ListagemApolices() {
             </div>
           </Link>
 
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3">
             <div className="hidden sm:flex items-center gap-3 pr-4 border-r border-zinc-200">
               <div className="w-9 h-9 rounded-full bg-red-100 text-red-600 flex items-center justify-center font-bold text-sm uppercase">
                 {usuario.nome ? usuario.nome.charAt(0) : 'C'}
@@ -156,6 +157,15 @@ export default function ListagemApolices() {
                 <p className="text-[11px] text-zinc-500">{usuario.usuario || usuario.email}</p>
               </div>
             </div>
+
+            {/* Botão Voltar ao Painel */}
+            <Link
+              to="/dashboard/cliente"
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold text-zinc-600 hover:text-zinc-900 hover:bg-zinc-100 border border-zinc-200 transition-colors"
+            >
+              <ArrowLeft size={16} weight="bold" />
+              <span className="hidden sm:inline">Voltar ao Painel</span>
+            </Link>
 
             <button
               onClick={() => {

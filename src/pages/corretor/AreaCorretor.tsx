@@ -90,6 +90,19 @@ const FORM_CLIENTE_INICIAL: FormClienteData = {
   dataNascimento: '1990-01-01',
 };
 
+// Validação de Maioridade (18 anos)
+const validarMaioridade = (dataNascimentoStr: string): boolean => {
+  if (!dataNascimentoStr) return false;
+  const hoje = new Date();
+  const nascimento = new Date(dataNascimentoStr);
+  let idade = hoje.getFullYear() - nascimento.getFullYear();
+  const m = hoje.getMonth() - nascimento.getMonth();
+  if (m < 0 || (m === 0 && hoje.getDate() < nascimento.getDate())) {
+    idade--;
+  }
+  return idade >= 18;
+};
+
 export default function AreaCorretor() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -268,21 +281,31 @@ export default function AreaCorretor() {
       return;
     }
 
+    if (!validarMaioridade(formCliente.dataNascimento)) {
+      setErroCliente('O cliente deve ser maior de 18 anos para ser cadastrado.');
+      ToastAlerta('Cadastro não permitido: Menores de 18 anos não podem ser segurados.', 'erro');
+      return;
+    }
+
     setSalvando(true);
 
     const primeiroNome = formCliente.nomeCompleto.trim().split(' ')[0].toLowerCase();
     const senhaGerada = `${primeiroNome}1234`;
+    const emailLimpo = formCliente.email.trim();
 
+    // Payload ajustado para alinhar com o padrão de Usuário/Cliente da API Spring Boot
     const clientePayload = {
       nomeCompleto: formCliente.nomeCompleto.trim(),
-      email: formCliente.email.trim(),
+      email: emailLimpo,
       cpfCnpj: formCliente.cpfCnpj.replace(/\D/g, ''),
       dataNascimento: formCliente.dataNascimento || '1990-01-01',
       usuario: {
-        usuario: formCliente.email.trim(),
+        id: null,
+        nome: formCliente.nomeCompleto.trim(),
+        usuario: emailLimpo, // O campo 'usuario' geralmente armazena o e-mail de login
         senha: senhaGerada,
         perfil: 'ROLE_CLIENTE',
-        nome: formCliente.nomeCompleto.trim()
+        foto: ''
       }
     };
 
@@ -297,7 +320,7 @@ export default function AreaCorretor() {
 
       await cadastrar('/clientes/cadastrar', clientePayload, () => undefined, header);
       
-      ToastAlerta(`Cliente cadastrado com sucesso! Senha gerada: ${senhaGerada}`, 'sucesso');
+      ToastAlerta(`Cliente cadastrado! Senha de acesso: ${senhaGerada}`, 'sucesso');
       setModalClienteAberto(false);
       carregarDadosApi();
       setFormCliente(FORM_CLIENTE_INICIAL);
@@ -1047,8 +1070,8 @@ export default function AreaCorretor() {
                   <input type="text" required value={formCliente.cpfCnpj} onChange={(e) => setFormCliente({...formCliente, cpfCnpj: e.target.value})} placeholder="12345678900" className="w-full p-2.5 bg-zinc-50 border border-zinc-200 rounded-xl text-zinc-900 focus:ring-2 focus:ring-red-600 focus:outline-none" />
                 </div>
                 <div>
-                  <label className="block text-zinc-700 font-semibold mb-1">Data de Nascimento</label>
-                  <input type="date" value={formCliente.dataNascimento} onChange={(e) => setFormCliente({...formCliente, dataNascimento: e.target.value})} className="w-full p-2.5 bg-zinc-50 border border-zinc-200 rounded-xl text-zinc-900 focus:ring-2 focus:ring-red-600 focus:outline-none" />
+                  <label className="block text-zinc-700 font-semibold mb-1">Data de Nascimento *</label>
+                  <input type="date" required value={formCliente.dataNascimento} onChange={(e) => setFormCliente({...formCliente, dataNascimento: e.target.value})} className="w-full p-2.5 bg-zinc-50 border border-zinc-200 rounded-xl text-zinc-900 focus:ring-2 focus:ring-red-600 focus:outline-none" />
                 </div>
               </div>
 
@@ -1066,7 +1089,6 @@ export default function AreaCorretor() {
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
           <div className="bg-white rounded-3xl max-w-3xl w-full shadow-2xl overflow-hidden border border-zinc-200 my-8 animate-in fade-in zoom-in-95 duration-200">
             
-            {/* Header com identidade visual Seguraê */}
             <div className="bg-zinc-900 text-white px-6 py-5 flex items-center justify-between border-b border-zinc-800">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-2xl bg-red-600/20 text-red-500 flex items-center justify-center border border-red-500/30">
@@ -1153,8 +1175,8 @@ export default function AreaCorretor() {
                   </div>
                 </div>
 
-                {/* DATAS E TIPO DE BEM */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 pt-4 border-t border-zinc-100 text-xs">
+                {/* DATAS, TIPO DE BEM E STATUS */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 pt-4 border-t border-zinc-100 text-xs">
                   <div>
                     <label className="block text-zinc-700 font-semibold mb-1.5">Início da Vigência *</label>
                     <input
@@ -1184,6 +1206,18 @@ export default function AreaCorretor() {
                       <option value="SUV Urbano">SUV Urbano</option>
                       <option value="Pick-up / Caminhonete">Pick-up / Caminhonete</option>
                       <option value="Motocicleta">Motocicleta</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-zinc-700 font-semibold mb-1.5">Status da Apólice *</label>
+                    <select
+                      value={formData.statusApolice}
+                      onChange={(e) => setFormData({ ...formData, statusApolice: Number(e.target.value) })}
+                      className="w-full px-3.5 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl text-zinc-900 font-bold focus:ring-2 focus:ring-red-600 focus:bg-white focus:outline-none transition-all cursor-pointer"
+                    >
+                      <option value={1}>🟢 Ativa</option>
+                      <option value={0}>🔵 Pendente</option>
+                      <option value={2}>🟠 Vencida</option>
                     </select>
                   </div>
                 </div>
@@ -1250,7 +1284,7 @@ export default function AreaCorretor() {
                           step="0.01"
                           value={formData.valorApolice}
                           onChange={(e) => setFormData({ ...formData, valorApolice: e.target.value })}
-                          className="w-full pl-10 pr-4 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl text-red-600 font-black focus:ring-2 focus:ring-red-600 focus:bg-white focus:outline-none transition-all"
+                          className="w-full pl-10 pr-4 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl text-red-600 font-black focus:ring-2 focus:ring-red-600 focus:bg-white focus:outline-none transition-all [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                         />
                       </div>
                     </div>
