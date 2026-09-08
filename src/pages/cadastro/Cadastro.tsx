@@ -18,13 +18,6 @@ import {
 import { cadastrarUsuario, cadastrar } from '../../services/Service';
 import { ToastAlerta } from '../../utils/toastalerta/ToastAlerta';
 import type Cliente from '../../models/Cliente';
-import {
-  formatarDataBR,
-  calcularIdade,
-  converterDataBrParaIso,
-  salvarClientesCorretor,
-  CLIENTES_INICIAIS_SISTEMA,
-} from '../../utils/corretorUtils';
 
 export default function Cadastro() {
   const navigate = useNavigate();
@@ -42,6 +35,36 @@ export default function Cadastro() {
   const [carregando, setCarregando] = useState(false);
   const [erro, setErro] = useState('');
 
+  const formatarDataBR = (valor: string) => {
+    const digitos = valor.replace(/\D/g, '').slice(0, 8);
+    if (digitos.length <= 2) return digitos;
+    if (digitos.length <= 4) return `${digitos.slice(0, 2)}/${digitos.slice(2)}`;
+    return `${digitos.slice(0, 2)}/${digitos.slice(2, 4)}/${digitos.slice(4, 8)}`;
+  };
+
+  const calcularIdade = (dataStr: string) => {
+    if (dataStr.length !== 10) return -1;
+    const [dia, mes, ano] = dataStr.split('/').map(Number);
+    if (!dia || !mes || !ano) return -1;
+    const dataNasc = new Date(ano, mes - 1, dia);
+    if (isNaN(dataNasc.getTime())) return -1;
+    const hoje = new Date();
+    let idade = hoje.getFullYear() - dataNasc.getFullYear();
+    const m = hoje.getMonth() - dataNasc.getMonth();
+    if (m < 0 || (m === 0 && hoje.getDate() < dataNasc.getDate())) {
+      idade--;
+    }
+    return idade;
+  };
+
+  const converterDataBrParaIso = (dataStr: string) => {
+    const partes = dataStr.split('/');
+    if (partes.length === 3) {
+      return `${partes[2]}-${partes[1]}-${partes[0]}`;
+    }
+    return '';
+  };
+
   const handleCadastro = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -56,7 +79,6 @@ export default function Cadastro() {
         return;
       }
 
-      // Validação de formato da data e regra de maioridade (18+ anos)
       const idade = calcularIdade(dataNascimento);
       if (idade === -1) {
         setErro('Por favor, informe uma data de nascimento válida no formato dia/mês/ano (ex: 15/05/1995).');
@@ -87,114 +109,45 @@ export default function Cadastro() {
     setCarregando(true);
 
     const emailNormalizado = email.trim().toLowerCase();
-
-    // 1. Verificação REAL no front-end para saber se o e-mail já existe de fato
-    const rawLocais = localStorage.getItem('segurae_usuarios_locais');
-    const listaLocais = rawLocais ? JSON.parse(rawLocais) : [];
-    const emailJaExisteNosUsuarios = listaLocais.some(
-      (u: { usuario?: string }) => u.usuario?.toLowerCase().trim() === emailNormalizado
-    );
-
-    const rawClientes = localStorage.getItem('segurae_clientes_corretor');
-    const listaClientes = rawClientes ? JSON.parse(rawClientes) : CLIENTES_INICIAIS_SISTEMA;
-    const emailJaExisteNosClientes = listaClientes.some(
-      (c: Cliente) => c.email?.toLowerCase().trim() === emailNormalizado
-    );
-
-    if (emailJaExisteNosUsuarios || emailJaExisteNosClientes) {
-      setErro('Este e-mail já está cadastrado no sistema! Faça login diretamente na tela de acesso.');
-      setCarregando(false);
-      return;
-    }
-
-    // 2. Persistência local garantida (Fake Consumo / Frontend-first)
-    const novoId = Date.now();
     const dataNascimentoIso = converterDataBrParaIso(dataNascimento) || '1990-01-01';
 
-    // Salva o novo usuário para login local imediato
-    const novoUsuario = {
-      id: novoId,
-      nome: nome.trim(),
-      usuario: emailNormalizado,
-      senha: senha,
-      foto: fotoUrl.trim() || '',
-      perfil: tipoAcesso === 'cliente' ? 'ROLE_CLIENTE' : 'ROLE_CORRETOR',
-      cpfCnpj: cpfCnpj.trim(),
-      dataNascimento: dataNascimentoIso,
-    };
-    localStorage.setItem(
-      'segurae_usuarios_locais',
-      JSON.stringify([...listaLocais, novoUsuario])
-    );
-
-    // Se for cliente, salva também na lista de clientes do corretor para aparecer na Gestão de Clientes
-    if (tipoAcesso === 'cliente') {
-      const novoCliente: Cliente = {
-        id: novoId,
-        nomeCompleto: nome.trim(),
-        email: emailNormalizado,
-        cpfCnpj: cpfCnpj.trim(),
-        dataNascimento: dataNascimentoIso,
-      };
-      const listaAtualizada = [
-        novoCliente,
-        ...listaClientes.filter((c: Cliente) => c.email?.toLowerCase().trim() !== emailNormalizado),
-      ];
-      salvarClientesCorretor(listaAtualizada);
-    }
-
-    // Se este e-mail estava na lista de excluídos, remove-o
     try {
-      const rawExcluidos = localStorage.getItem('segurae_clientes_excluidos');
-      if (rawExcluidos) {
-        const excluidos = JSON.parse(rawExcluidos);
-        if (Array.isArray(excluidos)) {
-          const limpos = excluidos.filter(
-            (e: { email?: string }) => e.email?.toLowerCase().trim() !== emailNormalizado
-          );
-          localStorage.setItem('segurae_clientes_excluidos', JSON.stringify(limpos));
-        }
-      }
-    } catch {
-      // ignora
-    }
+      // Cadastro direto na API do backend
+      await cadastrarUsuario('/usuarios/cadastrar', {
+        id: 0,
+        nome: nome.trim(),
+        usuario: emailNormalizado,
+        senha: senha,
+        foto: fotoUrl.trim() || '',
+        perfil: tipoAcesso === 'cliente' ? 'ROLE_CLIENTE' : 'ROLE_CORRETOR',
+      });
 
-    // 3. Tenta cadastrar no backend em segundo plano de forma não-bloqueante (fire-and-forget)
-    (async () => {
-      try {
-        await cadastrarUsuario('/usuarios/cadastrar', {
-          id: 0,
-          nome: nome.trim(),
-          usuario: emailNormalizado,
-          senha: senha,
-          foto: fotoUrl.trim() || '',
-          perfil: tipoAcesso === 'cliente' ? 'ROLE_CLIENTE' : 'ROLE_CORRETOR',
-        });
-      } catch {
-        // segue normalmente com persistência local
-      }
       if (tipoAcesso === 'cliente') {
+        const cpfDigitos = cpfCnpj.replace(/\D/g, '');
+        const cpfValido = cpfDigitos.length >= 11 ? cpfDigitos : '12345678901';
+        
         try {
-          const cpfDigitos = cpfCnpj.replace(/\D/g, '');
-          const cpfValido =
-            cpfDigitos.length >= 11
-              ? cpfDigitos
-              : `${Math.floor(10000000000 + Math.random() * 89999999999)}`;
           await cadastrar<Cliente>('/clientes/cadastrar', {
             nomeCompleto: nome.trim(),
             email: emailNormalizado,
             cpfCnpj: cpfValido,
             dataNascimento: dataNascimentoIso,
           });
-        } catch {
-          // segue normalmente
+        } catch (cliErr) {
+          console.warn('Aviso ao cadastrar entidade cliente na API:', cliErr);
         }
       }
-    })();
 
-    ToastAlerta('Conta criada com sucesso! Faça seu login.', 'sucesso');
-    setCarregando(false);
-    navigate('/login', { state: { tipoAcesso } });
+      ToastAlerta('Conta criada com sucesso! Faça seu login.', 'sucesso');
+      navigate('/login', { state: { tipoAcesso } });
+    } catch (error: any) {
+      console.error('Erro no cadastro:', error);
+      const mensagemErro = error?.response?.data?.message || error?.message || 'Erro ao conectar com o servidor. Verifique os dados ou tente novamente.';
+      setErro(mensagemErro);
+      ToastAlerta('Erro ao realizar cadastro.', 'erro');
+    } finally {
+      setCarregando(false);
+    }
   };
 
   return (

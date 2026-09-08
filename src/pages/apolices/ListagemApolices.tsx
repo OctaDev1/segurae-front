@@ -19,89 +19,11 @@ import {
 } from '@phosphor-icons/react';
 import { AuthContext } from '../../contexts/AuthContext';
 import type Apolice from '../../models/Apolice';
-import { buscar, getAuthHeaders } from '../../services/Service';
+import { buscar } from '../../services/Service';
 import { ToastAlerta } from '../../utils/toastalerta/ToastAlerta';
 
-const APOLICES_INICIAIS: Apolice[] = [
-  {
-    id: 1,
-    numeroApolice: 'SEG-2026-X892A1',
-    marcaModelo: 'Toyota Corolla Cross XRE 2.0',
-    bemSegurado: 'Automóvel Passeio',
-    anoModelo: 2024,
-    placa: 'BRA2E19',
-    renavam: '00123456789',
-    valorApolice: 3850.0,
-    tipoCobertura: 'Total 100% FIPE + Terceiros (R$ 150k)',
-    dataInicio: '2026-01-15',
-    dataTermino: '2027-01-15',
-    statusApolice: 1,
-    cliente: {
-      id: 1,
-      nomeCompleto: 'Carlos Eduardo Mendes',
-      email: 'carlos.mendes@email.com',
-      cpfCnpj: '123.456.789-00',
-      dataNascimento: '1988-04-12',
-    },
-    usuario: {
-      id: 1,
-      nome: 'Mariana Silva (Corretora)',
-      email: 'mariana.corretora@segurae.com.br',
-    },
-  },
-  {
-    id: 2,
-    numeroApolice: 'SEG-2025-F741B3',
-    marcaModelo: 'Honda Civic Touring 1.5 Turbo',
-    bemSegurado: 'Automóvel Passeio',
-    anoModelo: 2022,
-    placa: 'SEG9A88',
-    renavam: '00987654321',
-    valorApolice: 4200.0,
-    tipoCobertura: 'Compreensiva + Vidros, Faróis e Carro Reserva',
-    dataInicio: '2025-08-10',
-    dataTermino: '2026-08-10',
-    statusApolice: 1,
-    cliente: {
-      id: 1,
-      nomeCompleto: 'Carlos Eduardo Mendes',
-      email: 'carlos.mendes@email.com',
-      cpfCnpj: '123.456.789-00',
-      dataNascimento: '1988-04-12',
-    },
-    usuario: {
-      id: 2,
-      nome: 'Roberto Dias (Corretor)',
-      email: 'roberto.corretor@segurae.com.br',
-    },
-  },
-  {
-    id: 3,
-    numeroApolice: 'SEG-2024-C332D9',
-    marcaModelo: 'Jeep Renegade Longitude 1.3 Turbo',
-    bemSegurado: 'Automóvel Passeio',
-    anoModelo: 2021,
-    placa: 'RLM4C20',
-    renavam: '00543219876',
-    valorApolice: 3100.0,
-    tipoCobertura: 'Roubo, Furto e Incêndio',
-    dataInicio: '2024-02-01',
-    dataTermino: '2025-02-01',
-    statusApolice: 2,
-    cliente: {
-      id: 1,
-      nomeCompleto: 'Carlos Eduardo Mendes',
-      email: 'carlos.mendes@email.com',
-      cpfCnpj: '123.456.789-00',
-      dataNascimento: '1988-04-12',
-    },
-    usuario: {
-      id: 1,
-      nome: 'Mariana Silva (Corretora)',
-      email: 'mariana.corretora@segurae.com.br',
-    },
-  },
-];
+const getAuthHeader = (token?: string) =>
+  token ? { headers: { Authorization: `Bearer ${token}` } } : {};
 
 export default function ListagemApolices() {
   const navigate = useNavigate();
@@ -121,10 +43,35 @@ export default function ListagemApolices() {
     }
   }, [isAutenticado, isCliente, navigate]);
 
-  const [apolices] = useState<Apolice[]>(APOLICES_INICIAIS);
+  const [apolices, setApolices] = useState<Apolice[]>([]);
+  const [carregando, setCarregando] = useState(true);
   const [busca, setBusca] = useState('');
   const [filtroStatus, setFiltroStatus] = useState<'todas' | 'ativas' | 'vencidas'>('todas');
   const [apoliceSelecionada, setApoliceSelecionada] = useState<Apolice | null>(null);
+
+  const carregarApolicesApi = useCallback(async () => {
+    setCarregando(true);
+    try {
+      const header = getAuthHeader(usuario?.token);
+      const dados = await buscar<Apolice[]>('/apolices', undefined, header);
+      if (Array.isArray(dados)) {
+        setApolices(dados);
+      } else {
+        setApolices([]);
+      }
+    } catch {
+      ToastAlerta('Erro ao carregar apólices da API.', 'erro');
+      setApolices([]);
+    } finally {
+      setCarregando(false);
+    }
+  }, [usuario]);
+
+  useEffect(() => {
+    if (isAutenticado && isCliente) {
+      carregarApolicesApi();
+    }
+  }, [isAutenticado, isCliente, carregarApolicesApi]);
 
   const formatarMoeda = (valor: number) => {
     return Number(valor || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -139,12 +86,31 @@ export default function ListagemApolices() {
     return dataStr;
   };
 
-  const apolicesFiltradas = apolices.filter((apolice) => {
-    const termo = busca.toLowerCase();
-    const bateBusca =
-      apolice.marcaModelo.toLowerCase().includes(termo) ||
-      apolice.placa.toLowerCase().includes(termo) ||
-      (apolice.numeroApolice && apolice.numeroApolice.toLowerCase().includes(termo));
+  // Filtra apólices pertencentes exclusivamente ao cliente autenticado via API
+  const apolicesDoCliente = useMemo(() => {
+    const emailUsuario = (usuario?.usuario || usuario?.email || '').toLowerCase().trim();
+    const idUsuario = usuario?.id ? Number(usuario.id) : null;
+
+    return apolices.filter((a) => {
+      const emailCli = a.cliente?.email?.toLowerCase().trim();
+      const idCli = a.cliente?.id ? Number(a.cliente.id) : null;
+
+      if (emailUsuario && emailCli && emailCli === emailUsuario) return true;
+      if (idUsuario && idCli && idCli === idUsuario) return true;
+      if (idUsuario && a.usuario?.id && Number(a.usuario.id) === idUsuario) return true;
+
+      return false;
+    });
+  }, [apolices, usuario]);
+
+  const apolicesFiltradas = useMemo(() => {
+    return apolicesDoCliente.filter((apolice) => {
+      const termo = busca.toLowerCase();
+      const bateBusca =
+        !termo ||
+        apolice.marcaModelo?.toLowerCase().includes(termo) ||
+        apolice.placa?.toLowerCase().includes(termo) ||
+        (apolice.numeroApolice && apolice.numeroApolice.toLowerCase().includes(termo));
 
       if (!bateBusca) return false;
 
@@ -165,7 +131,6 @@ export default function ListagemApolices() {
   if (!isAutenticado || !isCliente) {
     return null;
   }
-
 
   return (
     <div className="min-h-screen bg-zinc-50 text-zinc-900 font-sans">
@@ -198,7 +163,6 @@ export default function ListagemApolices() {
               </div>
             </div>
 
-            {/* Botão Voltar ao Painel */}
             <Link
               to="/dashboard/cliente"
               className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold text-zinc-600 hover:text-zinc-900 hover:bg-zinc-100 border border-zinc-200 transition-colors"
@@ -393,7 +357,6 @@ export default function ListagemApolices() {
             </button>
           </div>
         ) : (
-
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {apolicesFiltradas.map((apolice) => {
               const isAtiva = apolice.statusApolice === 1;

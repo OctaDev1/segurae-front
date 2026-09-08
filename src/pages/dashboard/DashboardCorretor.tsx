@@ -1,10 +1,9 @@
-import { useCallback, useContext, useState, useEffect, useCallback, useMemo, useEffect, useMemo, useState } from "react";
+import { useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import NavBar from "../../components/navbar/NavBar";
 import Footer from "../../components/footer/Footer";
 import { AuthContext } from "../../contexts/AuthContext";
 import type Apolice from "../../models/Apolice";
-import type Cliente from "../../models/Cliente";
 import { buscar } from "../../services/Service";
 import { 
   Briefcase, 
@@ -19,15 +18,127 @@ import {
   CheckCircle,
   WarningCircle,
   Car,
-  CaretRight
+  CaretRight,
+  TrendUp
 } from "@phosphor-icons/react";
+
+const getAuthHeader = (token?: string) =>
+  token ? { headers: { Authorization: `Bearer ${token}` } } : {};
 
 export default function DashboardCorretor() {
   const navigate = useNavigate();
   const { usuario, handleLogout } = useContext(AuthContext);
 
+  // Isola a chave do localStorage utilizando o ID ou e-mail do corretor logado atual
+  const chaveLocalStorage = `segurae_apolices_${usuario?.id || usuario?.email || 'corretor'}`;
+
+  const [apolices, setApolices] = useState<Apolice[]>(() => {
+    const salvas = localStorage.getItem(chaveLocalStorage);
+    if (salvas) {
+      try {
+        const parsed = JSON.parse(salvas);
+        if (Array.isArray(parsed)) {
+          return parsed;
+        }
+      } catch { /* fallback */ }
+    }
+    return []; // Inicia vazio para evitar misturar dados de outros usuários ao dar F5
+  });
+
+  const [carregando, setCarregando] = useState(false);
+
   const nomeExibicao = usuario.nome || localStorage.getItem("nome") || "Corretor Parceiro";
   const emailExibicao = usuario.usuario || localStorage.getItem("usuario") || "corretor@segurae.com";
+
+  const carregarDadosReais = useCallback(async () => {
+    setCarregando(true);
+    try {
+      const header = getAuthHeader(usuario?.token);
+      const dados = await buscar<Apolice[]>("/apolices", undefined, header);
+      
+      const idLogado = usuario?.id;
+      const emailLogado = usuario?.usuario?.toLowerCase().trim();
+
+      if (Array.isArray(dados)) {
+        // Filtra estritamente apenas as apólices do corretor logado atualmente
+        const minhasApolices = dados.filter((a) => {
+          const idCorretorAp = a.usuario?.id;
+          const emailCorretorAp = a.usuario?.email?.toLowerCase().trim();
+
+          if (idCorretorAp && idLogado) {
+            return Number(idCorretorAp) === Number(idLogado);
+          }
+          if (emailCorretorAp && emailLogado) {
+            return emailCorretorAp === emailLogado;
+          }
+          return false;
+        });
+
+        setApolices(minhasApolices);
+        localStorage.setItem(chaveLocalStorage, JSON.stringify(minhasApolices));
+      } else {
+        setApolices([]);
+      }
+    } catch {
+      setApolices([]);
+    } finally {
+      setCarregando(false);
+    }
+  }, [usuario, chaveLocalStorage]);
+
+  // Carrega os dados automaticamente assim que o usuário estiver autenticado
+  useEffect(() => {
+    if (usuario?.token) {
+      carregarDadosReais();
+    }
+  }, [usuario, carregarDadosReais]);
+
+  // Contagem de clientes únicos baseada no e-mail ou ID do cliente
+  const totalClientesUnicos = useMemo(() => {
+    const clientesSet = new Set();
+    apolices.forEach((a) => {
+      const identificador = a.cliente?.email?.toLowerCase().trim() || a.cliente?.nomeCompleto?.toLowerCase().trim();
+      if (identificador) {
+        clientesSet.add(identificador);
+      }
+    });
+    return Math.max(clientesSet.size, 1); // Garante pelo menos 1 se houver apólices
+  }, [apolices]);
+
+  // Métricas dinâmicas calculadas direto da API
+  const totalVigentes = useMemo(() => {
+    return apolices.filter((a) => a.statusApolice === 1).length;
+  }, [apolices]);
+
+  const valorTotalApociles = useMemo(() => {
+    return apolices
+      .filter((a) => a.statusApolice === 1)
+      .reduce((acc, curr) => acc + Number(curr.valorApolice || 0), 0);
+  }, [apolices]);
+
+  const comissaoEstimadaTotal = useMemo(() => {
+    return valorTotalApociles * 0.15; // 15% de comissão
+  }, [valorTotalApociles]);
+
+  const apolicesRecentes = useMemo(() => {
+    return [...apolices].slice(0, 5);
+  }, [apolices]);
+
+  const formatarMoeda = (valor: number) => {
+    return Number(valor || 0).toLocaleString("pt-BR", {
+      style: "currency",
+      currency: "BRL",
+    });
+  };
+
+  const formatarData = (dataStr?: string) => {
+    if (!dataStr) return "Desconhecida";
+    const partes = dataStr.split("-");
+    if (partes.length === 3) {
+      return `${partes[2]}/${partes[1]}/${partes[0]}`;
+    }
+    return dataStr;
+  };
 
   return (
     <div className="w-full min-h-screen bg-zinc-50 text-zinc-900 relative flex flex-col justify-between">
@@ -86,7 +197,7 @@ export default function DashboardCorretor() {
 
         {/* Métricas de Performance do Corretor */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-10">
-          {/* Card 1: Carteira Ativa (Link para Gestão de Clientes) */}
+          {/* Card 1: Carteira de Clientes (Clientes Únicos) */}
           <Link
             to="/corretor/apolices?aba=clientes"
             className="bg-white rounded-3xl p-6 border border-zinc-200/80 shadow-xs hover:border-blue-500 hover:shadow-md transition-all group block cursor-pointer"
@@ -100,14 +211,14 @@ export default function DashboardCorretor() {
               </div>
             </div>
             <h3 className="text-2xl font-black text-zinc-900 mb-1">
-              48 <span className="text-xs font-normal text-zinc-500">segurados</span>
+              {totalClientesUnicos} <span className="text-xs font-normal text-zinc-500">{totalClientesUnicos === 1 ? 'segurado' : 'segurados'}</span>
             </h3>
             <p className="text-[11px] text-emerald-600 font-semibold flex items-center gap-1">
               <TrendUp size={14} weight="bold" /> +12% este mês
             </p>
           </Link>
 
-          {/* Card 2: Apólices Emitidas */}
+          {/* Card 2: Apólices Vigentes */}
           <div className="bg-white rounded-3xl p-6 border border-zinc-200/80 shadow-xs hover:border-zinc-300 transition-all">
             <div className="flex items-center justify-between mb-3">
               <span className="text-xs font-bold uppercase tracking-wider text-zinc-400">
@@ -118,14 +229,14 @@ export default function DashboardCorretor() {
               </div>
             </div>
             <h3 className="text-2xl font-black text-zinc-900 mb-1">
-              64 <span className="text-xs font-normal text-zinc-500">vigentes</span>
+              {totalVigentes} <span className="text-xs font-normal text-zinc-500">vigentes</span>
             </h3>
             <p className="text-[11px] text-zinc-400 font-medium">
               Taxa de renovação: 94%
             </p>
           </div>
 
-          {/* Card 3: Volume Sob Gestão */}
+          {/* Card 3: Comissão Acumulada */}
           <div className="bg-white rounded-3xl p-6 border border-zinc-200/80 shadow-xs hover:border-zinc-300 transition-all">
             <div className="flex items-center justify-between mb-3">
               <span className="text-xs font-bold uppercase tracking-wider text-zinc-400">
@@ -136,7 +247,7 @@ export default function DashboardCorretor() {
               </div>
             </div>
             <h3 className="text-2xl font-black text-emerald-600 mb-1">
-              R$ 18.450
+              {formatarMoeda(valorTotalApociles * 0.1)}
             </h3>
             <p className="text-[11px] text-zinc-400 font-medium">
               Ciclo atual de repasse
@@ -154,7 +265,7 @@ export default function DashboardCorretor() {
               </div>
             </div>
             <h3 className="text-2xl font-black text-amber-600 mb-1">
-              7 <span className="text-xs font-normal text-zinc-500">pendentes</span>
+              {formatarMoeda(comissaoEstimadaTotal)}
             </h3>
             <p className="text-[11px] text-zinc-400 font-medium">
               Calculada sobre as apólices ativas
@@ -276,7 +387,6 @@ export default function DashboardCorretor() {
 
         {/* Seção de Ações e Ferramentas do Corretor */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-10">
-          {/* Card Ação: Gestão de Apólices */}
           <div className="bg-white rounded-3xl p-6 border border-zinc-200/80 shadow-xs flex flex-col justify-between">
             <div>
               <div className="w-10 h-10 rounded-2xl bg-red-100 text-red-600 flex items-center justify-center mb-4">
@@ -298,7 +408,6 @@ export default function DashboardCorretor() {
             </Link>
           </div>
 
-          {/* Card Ação: Simulador de Coberturas */}
           <div className="bg-white rounded-3xl p-6 border border-zinc-200/80 shadow-xs flex flex-col justify-between">
             <div>
               <div className="w-10 h-10 rounded-2xl bg-blue-100 text-blue-600 flex items-center justify-center mb-4">
@@ -308,7 +417,7 @@ export default function DashboardCorretor() {
                 Tabela de Coberturas
               </h4>
               <p className="text-xs text-zinc-500 mb-6">
-                Revise os 3 planos oficiais disponíveis na Seguraê para orientar a contratação ideal para seu cliente segurado.
+                Revise os planos oficiais disponíveis na Seguraê para orientar a contratação ideal para seu cliente segurado.
               </p>
             </div>
             <Link
@@ -320,7 +429,6 @@ export default function DashboardCorretor() {
             </Link>
           </div>
 
-          {/* Card Ação: Perfil Profissional */}
           <div className="bg-white rounded-3xl p-6 border border-zinc-200/80 shadow-xs flex flex-col justify-between">
             <div>
               <div className="w-10 h-10 rounded-2xl bg-zinc-100 text-zinc-800 flex items-center justify-center mb-4">
