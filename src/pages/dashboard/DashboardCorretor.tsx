@@ -348,7 +348,7 @@ export default function DashboardCorretor() {
                           {ap.placa || "BRA2E19"} • {ap.anoModelo || 2024}
                         </div>
                       </td>
-                      <td className="py-3.5 text-zinc-600 max-w-[200px] truncate">
+                      <td className="py-3.5 text-zinc-600 max-w-50 truncate">
                         {ap.tipoCobertura || "Completo (Colisão e Terceiros)"}
                       </td>
                       <td className="py-3.5 font-black text-zinc-900">

@@ -2,7 +2,7 @@
 import axios from "axios";
 import { createContext, useState, type ReactNode } from "react";
 
-import { api, login } from "../services/Service";
+import { login } from "../services/Service";
 import type UsuarioLogin from "../models/UsuarioLogin";
 import { ToastAlerta } from "../utils/toastalerta/ToastAlerta";
 

@@ -36,7 +36,7 @@ export default function DashboardCliente() {
     return [];
   });
 
-  const [carregando, setCarregando] = useState(true);
+  const [, setCarregando] = useState(true);
 
   // Puxa o nome real do contexto de autenticação
   const nomeExibicao = usuario?.nome || localStorage.getItem("nome") || "Cliente Seguraê";
